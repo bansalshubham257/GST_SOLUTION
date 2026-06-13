@@ -1,0 +1,190 @@
+// lib/features/auth/presentation/pages/profile_page.dart
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/router/app_router.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_widgets.dart';
+import '../providers/auth_provider.dart';
+
+class ProfilePage extends ConsumerWidget {
+  const ProfilePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    final user = authState.valueOrNull?.user;
+    final themeMode = ref.watch(themeModeProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile & Settings')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // User info header
+          AppCard(
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: AppColors.primarySurface,
+                  backgroundImage: user?.photoUrl != null
+                      ? NetworkImage(user!.photoUrl!)
+                      : null,
+                  child: user?.photoUrl == null
+                      ? Text(
+                          (user?.name?.isNotEmpty == true ? user!.name![0] : '?').toUpperCase(),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user?.name ?? 'User', style: Theme.of(context).textTheme.titleLarge),
+                      if (user?.email != null)
+                        Text(user!.email!, style: Theme.of(context).textTheme.bodySmall),
+                      if (user?.phone != null)
+                        Text(user!.phone!, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Business', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          AppCard(
+            child: Column(
+              children: [
+                _SettingsItem(
+                  icon: Icons.business_outlined,
+                  title: 'Business Profile',
+                  subtitle: 'Edit name, GSTIN, address',
+                  onTap: () => context.push(AppRoutes.businessSetup),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.receipt_outlined,
+                  title: 'Invoice Settings',
+                  subtitle: 'Prefix, terms, signature',
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Preferences', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          AppCard(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.dark_mode_outlined),
+                  title: const Text('Dark Mode'),
+                  value: themeMode == ThemeMode.dark,
+                  onChanged: (val) {
+                    ref.read(themeModeProvider.notifier).state =
+                        val ? ThemeMode.dark : ThemeMode.light;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Support', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          AppCard(
+            child: Column(
+              children: [
+                _SettingsItem(
+                  icon: Icons.support_agent_outlined,
+                  title: 'Chat Support',
+                  onTap: () => context.push(AppRoutes.chatSupport),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy Policy',
+                  onTap: () {},
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.description_outlined,
+                  title: 'Terms of Service',
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          AppButton(
+            label: 'Sign Out',
+            isOutlined: true,
+            foregroundColor: AppColors.danger,
+            icon: Icons.logout,
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Sign Out'),
+                  content: const Text('Are you sure you want to sign out?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Sign Out', style: TextStyle(color: AppColors.danger)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                ref.read(authStateProvider.notifier).signOut();
+              }
+            },
+          ),
+          const SizedBox(height: 32),
+          Center(
+            child: Text(
+              'GST Solution v1.0.0',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  const _SettingsItem({required this.icon, required this.title, this.subtitle, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(8)),
+        child: Icon(icon, color: AppColors.primary, size: 20),
+      ),
+      title: Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+      subtitle: subtitle != null ? Text(subtitle!, style: Theme.of(context).textTheme.bodySmall) : null,
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiaryLight, size: 18),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    );
+  }
+}
+

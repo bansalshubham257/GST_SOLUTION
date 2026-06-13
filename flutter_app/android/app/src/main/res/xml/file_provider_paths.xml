@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- External files dir (used by image_picker for camera captures) -->
+    <external-files-path name="image_picker_external" path="."/>
+    <!-- Internal cache dir -->
+    <cache-path name="image_picker_cache" path="."/>
+    <!-- External cache dir -->
+    <external-cache-path name="image_picker_external_cache" path="."/>
+    <!-- External storage (gallery picks on older Android) -->
+    <external-path name="image_picker_external_root" path="."/>
+</paths>
+
