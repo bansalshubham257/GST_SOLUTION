@@ -8,7 +8,7 @@ const { pool } = require('./database');
 const logger = require('../utils/logger');
 
 async function runMigrations() {
-  const migrationsDir = path.join(__dirname, '../../../database/migrations');
+  const migrationsDir = path.join(__dirname, '../../database/migrations');
 
   if (!fs.existsSync(migrationsDir)) {
     logger.warn('No migrations directory found');

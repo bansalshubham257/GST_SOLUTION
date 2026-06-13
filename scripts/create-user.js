@@ -2,7 +2,7 @@
  * Create a user in gst_app.users for username/password login.
  *
  * Usage:
- *   node scripts/create-user.js
+ *   DATABASE_URL="postgresql://postgres:PASSWORD@switchback.proxy.rlwy.net:22297/railway" node scripts/create-user.js
  *
  * This script will prompt you for the user details and
  * insert them directly into the Railway PostgreSQL database.
