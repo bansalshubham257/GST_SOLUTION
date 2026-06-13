@@ -11,6 +11,13 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+// Set search_path so unqualified table references resolve to gst_app schema first
+pool.on('connect', (client) => {
+  client.query("SET search_path TO gst_app, public").catch((err) => {
+    logger.warn('Failed to set search_path:', err.message);
+  });
+});
+
 pool.on('error', (err) => {
   logger.error('Unexpected database error:', err);
 });

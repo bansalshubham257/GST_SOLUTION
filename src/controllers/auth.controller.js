@@ -201,23 +201,6 @@ const dbLogin = async (req, res, next) => {
     // Update last login
     await query('UPDATE gst_app.users SET last_login_at = NOW() WHERE id = $1', [dbUser.id]);
 
-    // Upsert into public.users for backward compatibility with existing controllers
-    const firebaseUid = `custom_${dbUser.id}`;
-    const publicUserResult = await query(
-      `INSERT INTO users (firebase_uid, email, phone, name, last_login_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())
-       ON CONFLICT (firebase_uid) DO UPDATE
-         SET name = COALESCE(EXCLUDED.name, users.name),
-             email = COALESCE(EXCLUDED.email, users.email),
-             phone = COALESCE(EXCLUDED.phone, users.phone),
-             last_login_at = NOW(),
-             updated_at = NOW()
-       RETURNING *`,
-      [firebaseUid, dbUser.email || '', dbUser.phone || '', dbUser.name]
-    );
-
-    const user = publicUserResult.rows[0];
-
     // Generate custom JWT
     const token = jwt.sign(
       {
@@ -231,26 +214,26 @@ const dbLogin = async (req, res, next) => {
 
     // Check business setup
     const bizResult = await query(
-      'SELECT id FROM businesses WHERE user_id = $1 AND is_active = true LIMIT 1',
-      [user.id]
+      'SELECT id FROM gst_app.businesses WHERE user_id = $1 AND is_active = true LIMIT 1',
+      [dbUser.id]
     );
 
     res.json({
       token,
       user: {
-        id: user.id,
-        firebaseUid: user.firebase_uid,
-        email: user.email,
-        phone: user.phone,
-        name: user.name,
-        role: user.role,
+        id: dbUser.id,
+        firebaseUid: `custom_${dbUser.id}`,
+        email: dbUser.email || '',
+        phone: dbUser.phone || '',
+        name: dbUser.name || '',
+        role: dbUser.role || 'user',
         plan: dbUser.plan_type,
         maxStaff: dbUser.max_staff,
         maxServices: dbUser.max_services,
         maxSales: dbUser.max_sales,
         isBusinessSetupDone: bizResult.rows.length > 0,
         businessId: bizResult.rows[0]?.id || null,
-        createdAt: user.created_at,
+        createdAt: dbUser.created_at,
       },
     });
   } catch (err) {

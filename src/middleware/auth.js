@@ -17,39 +17,48 @@ const DEV_TEST_UID   = 'dev_test_uid_001';
  */
 async function authenticateCustomJwt(token) {
   const decoded = jwt.verify(token, JWT_SECRET);
-  const firebaseUid = `custom_${decoded.userId}`;
 
+  // Query gst_app.users directly using the userId from JWT
   const userResult = await query(
-    `SELECT u.*, b.id as business_id, b.name as business_name, b.gstin as business_gstin,
-            b.state as business_state, b.state_code as business_state_code
-     FROM users u
-     LEFT JOIN businesses b ON b.user_id = u.id AND b.is_active = true
-     WHERE u.firebase_uid = $1
-     LIMIT 1`,
-    [firebaseUid]
+    'SELECT * FROM gst_app.users WHERE id = $1 AND is_active = true LIMIT 1',
+    [decoded.userId]
   );
 
   if (userResult.rows.length === 0) {
-    // Auto-create user row in public.users for backward compat
-    const newUser = await query(
-      `INSERT INTO users (firebase_uid, name, last_login_at, created_at, updated_at)
-       VALUES ($1, $2, NOW(), NOW(), NOW())
-       RETURNING *`,
-      [firebaseUid, decoded.username || 'User']
-    );
-    const u = newUser.rows[0];
-    u.businessId = null;
-    u.businessGstin = null;
-    u.businessState = null;
-    u.businessStateCode = null;
-    return u;
+    throw new Error('User not found');
   }
 
-  const u = userResult.rows[0];
-  u.businessId = userResult.rows[0].business_id;
-  u.businessGstin = userResult.rows[0].business_gstin;
-  u.businessState = userResult.rows[0].business_state;
-  u.businessStateCode = userResult.rows[0].business_state_code;
+  const dbUser = userResult.rows[0];
+
+  // Check business setup
+  const bizResult = await query(
+    `SELECT id, name as business_name, gstin as business_gstin,
+            state as business_state, state_code as business_state_code
+     FROM gst_app.businesses
+     WHERE user_id = $1 AND is_active = true
+     LIMIT 1`,
+    [decoded.userId]
+  );
+
+  const biz = bizResult.rows[0] || {};
+  const u = {
+    id: dbUser.id,
+    firebase_uid: `custom_${dbUser.id}`,
+    email: dbUser.email || '',
+    phone: dbUser.phone || '',
+    name: dbUser.name || '',
+    photo_url: dbUser.photo_url || null,
+    role: dbUser.role || 'user',
+    business_setup_done: !!biz.id,
+    is_active: dbUser.is_active,
+    last_login_at: dbUser.last_login_at,
+    created_at: dbUser.created_at,
+    updated_at: dbUser.updated_at,
+    businessId: biz.id || null,
+    businessGstin: biz.business_gstin || null,
+    businessState: biz.business_state || null,
+    businessStateCode: biz.business_state_code || null,
+  };
   return u;
 }
 
