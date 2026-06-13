@@ -35,7 +35,18 @@ const initFirebase = () => {
   }
 };
 
+const isFirebaseAvailable = () => {
+  try {
+    return admin.apps.length > 0;
+  } catch {
+    return false;
+  }
+};
+
 const verifyFirebaseToken = async (token) => {
+  if (!isFirebaseAvailable()) {
+    throw new Error('Firebase not configured');
+  }
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     return decoded;
@@ -45,8 +56,11 @@ const verifyFirebaseToken = async (token) => {
 };
 
 const getFirebaseUser = async (uid) => {
+  if (!isFirebaseAvailable()) {
+    throw new Error('Firebase not configured');
+  }
   return await admin.auth().getUser(uid);
 };
 
-module.exports = { initFirebase, verifyFirebaseToken, getFirebaseUser, admin };
+module.exports = { initFirebase, verifyFirebaseToken, getFirebaseUser, admin, isFirebaseAvailable };
 

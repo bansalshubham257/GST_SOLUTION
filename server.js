@@ -97,9 +97,13 @@ async function start() {
     await initDB();
     logger.info('✅ Database connected');
 
-    // Initialize Firebase Admin
-    initFirebase();
-    logger.info('✅ Firebase initialized');
+    // Initialize Firebase Admin (optional — not needed for username/password auth)
+    try {
+      initFirebase();
+      logger.info('✅ Firebase initialized');
+    } catch (fbError) {
+      logger.warn('⚠️  Firebase not configured — username/password auth will still work');
+    }
 
     httpServer.listen(PORT, () => {
       logger.info(`🚀 GST Solution API running on port ${PORT}`);
