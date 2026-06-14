@@ -1,5 +1,3 @@
-// lib/features/auth/presentation/pages/profile_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +6,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_widgets.dart';
+import '../../../../core/storage/local_storage.dart';
 import '../providers/auth_provider.dart';
 
 class ProfilePage extends ConsumerWidget {
@@ -18,6 +17,16 @@ class ProfilePage extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
     final user = authState.valueOrNull?.user;
     final themeMode = ref.watch(themeModeProvider);
+
+    final businessBox = LocalStorage.businessBox;
+    final businessName = businessBox.get('name', defaultValue: '') as String;
+    final businessGstin = businessBox.get('gstin', defaultValue: '') as String;
+    final businessAddress = businessBox.get('address', defaultValue: '') as String;
+    final businessCity = businessBox.get('city', defaultValue: '') as String;
+    final businessState = businessBox.get('state', defaultValue: '') as String;
+    final businessPhone = businessBox.get('phone', defaultValue: '') as String;
+    final businessEmail = businessBox.get('email', defaultValue: '') as String;
+    final hasBusiness = businessName.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Settings')),
@@ -62,6 +71,75 @@ class ProfilePage extends ConsumerWidget {
           const SizedBox(height: 8),
           _buildPlanCard(context, user),
           const SizedBox(height: 16),
+          Text('Business Details', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          AppCard(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: hasBusiness
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.business, color: AppColors.primary, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(businessName, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                                  if (businessGstin.isNotEmpty)
+                                    Text('GSTIN: $businessGstin', style: Theme.of(context).textTheme.bodySmall),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (businessAddress.isNotEmpty || businessCity.isNotEmpty || businessState.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            [
+                              if (businessAddress.isNotEmpty) businessAddress,
+                              if (businessCity.isNotEmpty) businessCity,
+                              if (businessState.isNotEmpty) businessState,
+                            ].join(', '),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        if (businessPhone.isNotEmpty || businessEmail.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            [if (businessPhone.isNotEmpty) businessPhone, if (businessEmail.isNotEmpty) businessEmail].join(' | '),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    )
+                  : Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.business_outlined, size: 32, color: AppColors.textTertiaryLight),
+                            const SizedBox(height: 8),
+                            const Text('No business details yet', style: TextStyle(color: AppColors.textSecondaryLight, fontSize: 13)),
+                            const SizedBox(height: 4),
+                            TextButton(
+                              onPressed: () => context.push(AppRoutes.businessSetup),
+                              child: const Text('Set up your business'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Text('Business', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
           const SizedBox(height: 8),
           AppCard(
@@ -78,7 +156,7 @@ class ProfilePage extends ConsumerWidget {
                   icon: Icons.receipt_outlined,
                   title: 'Invoice Settings',
                   subtitle: 'Prefix, terms, signature',
-                  onTap: () {},
+                  onTap: () => context.push(AppRoutes.businessSetup),
                 ),
               ],
             ),

@@ -18,6 +18,9 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
+  bool _showPaymentBreakdown = false;
+  bool _showPurchaseDetails = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,7 +81,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               stats.when(
-                data: (data) => _buildDailySummary(context, data),
+                data: (data) => Column(
+                  children: [
+                    _buildDailySummary(context, data),
+                    if (data.purchaseCount > 0) ...[
+                      const SizedBox(height: 16),
+                      _buildPurchaseSummary(context, data),
+                    ],
+                  ],
+                ),
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (_, __) => _buildOfflineBanner(),
               ),
@@ -206,61 +217,192 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Payment Breakdown',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    Text('${data.invoiceCount} transactions',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondaryLight)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _PaymentBar(
-                        label: 'Cash',
-                        amount: data.cashSales,
-                        total: data.totalSales,
-                        color: const Color(0xFF059669)),
-                    const SizedBox(width: 8),
-                    _PaymentBar(
-                        label: 'UPI',
-                        amount: data.upiSales,
-                        total: data.totalSales,
-                        color: Colors.blue),
-                    const SizedBox(width: 8),
-                    _PaymentBar(
-                        label: 'Card',
-                        amount: data.cardSales,
-                        total: data.totalSales,
-                        color: AppColors.secondary),
-                  ],
-                ),
-                if (data.totalGstCollected > 0) ...[
-                  const Divider(height: 24),
-                  Row(
+                InkWell(
+                  onTap: () => setState(() => _showPaymentBreakdown = !_showPaymentBreakdown),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('GST Collected',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondaryLight)),
-                      Text('₹${_formatAmount(data.totalGstCollected)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary)),
+                      const Text('Total Sales',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('₹${_formatAmount(data.totalSales)}',
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                          const SizedBox(width: 8),
+                          AnimatedRotation(
+                            turns: _showPaymentBreakdown ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: const Icon(Icons.expand_more, color: AppColors.textTertiaryLight, size: 20),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Text('${data.invoiceCount} transactions',
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                            const Spacer(),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _PaymentBar(
+                                label: 'Cash',
+                                amount: data.cashSales,
+                                total: data.totalSales,
+                                color: const Color(0xFF059669)),
+                            const SizedBox(width: 8),
+                            _PaymentBar(
+                                label: 'UPI',
+                                amount: data.upiSales,
+                                total: data.totalSales,
+                                color: Colors.blue),
+                            const SizedBox(width: 8),
+                            _PaymentBar(
+                                label: 'Card',
+                                amount: data.cardSales,
+                                total: data.totalSales,
+                                color: AppColors.secondary),
+                          ],
+                        ),
+                        if (data.totalGstCollected > 0) ...[
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('GST Collected',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight)),
+                              Text('₹${_formatAmount(data.totalGstCollected)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  crossFadeState: _showPaymentBreakdown ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 250),
+                ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPurchaseSummary(BuildContext context, DashboardStats data) {
+    return AppCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () => setState(() => _showPurchaseDetails = !_showPurchaseDetails),
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.shopping_cart_outlined, color: AppColors.primary, size: 20),
+                      SizedBox(width: 8),
+                      Text('Purchase Summary', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('₹${_formatAmount(data.totalPurchases)}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimaryLight)),
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        turns: _showPurchaseDetails ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: const Icon(Icons.expand_more, color: AppColors.textTertiaryLight, size: 20),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Text('${data.purchaseCount} purchases',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                        if (data.pendingPurchaseAmount > 0) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: AppColors.warningLight, borderRadius: BorderRadius.circular(12)),
+                            child: Text('₹${_formatAmount(data.pendingPurchaseAmount)} pending',
+                                style: const TextStyle(fontSize: 10, color: AppColors.warning, fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('GST on Purchases', style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                              const SizedBox(height: 4),
+                              Text('₹${_formatAmount(data.purchaseGst)}',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                            ],
+                          ),
+                        ),
+                        if (data.pendingPurchaseAmount > 0)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text('Pending Payment', style: TextStyle(fontSize: 12, color: AppColors.warning)),
+                                const SizedBox(height: 4),
+                                Text('₹${_formatAmount(data.pendingPurchaseAmount)}',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    AppButton(
+                      label: 'View All Purchases',
+                      isOutlined: true,
+                      icon: Icons.shopping_cart_outlined,
+                      onPressed: () => context.push(AppRoutes.purchases),
+                    ),
+                  ],
+                ),
+              ),
+              crossFadeState: _showPurchaseDetails ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 250),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

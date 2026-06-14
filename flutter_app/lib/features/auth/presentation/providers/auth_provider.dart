@@ -229,8 +229,19 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   // ─── Skip Login (offline free mode, no backend call) ─────────────────────
 
   Future<void> skipLogin() async {
+    final userId = 'local-${DateTime.now().millisecondsSinceEpoch}';
+    await _ensureDataIsolation(userId);
+
+    if (!LocalStorage.isBusinessSetupDone()) {
+      await LocalStorage.saveBusinessData({
+        'name': 'My Business',
+        'businessType': 'retail',
+      });
+      await LocalStorage.markBusinessSetupDone();
+    }
+
     final localUser = UserEntity(
-      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+      id: userId,
       name: 'Guest',
       plan: 'free',
       maxStaff: 2,
@@ -240,7 +251,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       businessId: 'local-business',
       createdAt: DateTime.now(),
     );
-    await _ensureDataIsolation(localUser.id);
     state = AsyncData(AuthState(
       isLoggedIn: true,
       isBusinessSetupDone: true,

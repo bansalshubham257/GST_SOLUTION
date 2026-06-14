@@ -120,7 +120,6 @@ class _BottomNavBar extends StatelessWidget {
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
-              const SizedBox(width: 48),
               _NavItem(
                 icon: Icons.shopping_cart_outlined,
                 activeIcon: Icons.shopping_cart,
@@ -128,6 +127,7 @@ class _BottomNavBar extends StatelessWidget {
                 isActive: currentIndex == 2,
                 onTap: () => onTap(2),
               ),
+              const SizedBox(width: 56),
               _NavItem(
                 icon: Icons.people_outline,
                 activeIcon: Icons.people,
@@ -170,25 +170,29 @@ class _NavItem extends StatelessWidget {
     final color = isActive ? AppColors.primary : AppColors.textTertiaryLight;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
         decoration: BoxDecoration(
           color: isActive ? AppColors.primarySurface : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(isActive ? activeIcon : icon, color: color, size: 24),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            Icon(isActive ? activeIcon : icon, color: color, size: 20),
+            const SizedBox(height: 1),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
             ),
           ],

@@ -127,25 +127,34 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
 
     ref.listen(createInvoiceProvider, (_, next) {
       if (next.isSuccess && next.createdInvoice != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final invoice = next.createdInvoice!;
+        final messenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
+        ref.read(createInvoiceProvider.notifier).reset();
+        context.pop();
+        messenger.showSnackBar(
           SnackBar(
             content: Text(_isEditing ? 'Invoice updated!' : 'Invoice created!'),
             backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
             action: SnackBarAction(
               label: 'View',
               textColor: Colors.white,
-              onPressed: () => context
-                  .push('${AppRoutes.serviceHistory}/${next.createdInvoice!.id}'),
+              onPressed: () => router
+                  .push('${AppRoutes.serviceHistory}/${invoice.id}'),
             ),
           ),
         );
-        ref.read(createInvoiceProvider.notifier).reset();
-        context.pop();
       }
       if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(next.error!), backgroundColor: AppColors.danger),
+            content: Text(next.error!),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     });
@@ -165,30 +174,36 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       body: LoadingOverlay(
         isLoading: createState.isLoading,
         message: _isEditing ? 'Updating invoice...' : 'Creating invoice...',
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildCustomerSection(),
-              const SizedBox(height: 16),
-              _buildDateSection(),
-              const SizedBox(height: 16),
-              _buildLineItemsSection(),
-              const SizedBox(height: 16),
-              _buildPaymentModeSection(),
-              const SizedBox(height: 16),
-              _buildTotalsSection(totals),
-              const SizedBox(height: 16),
-              _buildFinalSaleOptionsSection(),
-              const SizedBox(height: 16),
-              _buildNotesSection(),
-              const SizedBox(height: 100),
-            ],
-          ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildCustomerSection(),
+                    const SizedBox(height: 16),
+                    _buildDateSection(),
+                    const SizedBox(height: 16),
+                    _buildLineItemsSection(),
+                    const SizedBox(height: 16),
+                    _buildPaymentModeSection(),
+                    const SizedBox(height: 16),
+                    _buildTotalsSection(totals),
+                    const SizedBox(height: 16),
+                    _buildFinalSaleOptionsSection(),
+                    const SizedBox(height: 16),
+                    _buildNotesSection(),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ),
+            _buildBottomBar(totals, createState.isLoading),
+          ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(totals, createState.isLoading),
     );
   }
 

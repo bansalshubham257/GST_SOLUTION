@@ -101,32 +101,38 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
       body: LoadingOverlay(
         isLoading: _isGeneratingPdf,
         message: 'Generating PDF...',
-        child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusBanner(context),
-            const SizedBox(height: 16),
-            _buildInvoiceMeta(context),
-            const SizedBox(height: 16),
-            _buildCustomerCard(context),
-            const SizedBox(height: 16),
-            _buildLineItemsCard(context),
-            const SizedBox(height: 16),
-            _buildTaxSummaryCard(context),
-            const SizedBox(height: 16),
-            _buildTotalsCard(context),
-            if (invoice.notes != null) ...[
-              const SizedBox(height: 16),
-              _buildNotesCard(context),
-            ],
-            const SizedBox(height: 80),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatusBanner(context),
+                    const SizedBox(height: 16),
+                    _buildInvoiceMeta(context),
+                    const SizedBox(height: 16),
+                    _buildCustomerCard(context),
+                    const SizedBox(height: 16),
+                    _buildLineItemsCard(context),
+                    const SizedBox(height: 16),
+                    _buildTaxSummaryCard(context),
+                    const SizedBox(height: 16),
+                    _buildTotalsCard(context),
+                    if (invoice.notes != null) ...[
+                      const SizedBox(height: 16),
+                      _buildNotesCard(context),
+                    ],
+                    const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+            ),
+            _buildActionBar(context),
           ],
         ),
       ),
-      ),
-      bottomNavigationBar: _buildActionBar(context),
     );
   }
 

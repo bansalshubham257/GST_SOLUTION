@@ -50,6 +50,11 @@ class SyncService {
   }
 
   Future<void> _savePulledData(Map<String, dynamic> data) async {
+    final business = data['business'] as Map<String, dynamic>?;
+    if (business != null) {
+      await LocalStorage.saveBusinessData(business);
+    }
+
     final customers = (data['customers'] as List?) ?? [];
     for (final c in customers) {
       final map = Map<String, dynamic>.from(c);

@@ -112,23 +112,33 @@ class _CreatePurchasePageState extends ConsumerState<CreatePurchasePage> {
 
     ref.listen(createPurchaseProvider, (_, next) {
       if (next.isSuccess && next.createdPurchase != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final purchase = next.createdPurchase!;
+        final messenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
+        ref.read(createPurchaseProvider.notifier).reset();
+        context.pop();
+        messenger.showSnackBar(
           SnackBar(
             content: Text(_isEditing ? 'Purchase updated!' : 'Purchase created!'),
             backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
             action: SnackBarAction(
               label: 'View',
               textColor: Colors.white,
-              onPressed: () => context.push('/purchases/${next.createdPurchase!.id}'),
+              onPressed: () => router.push('/purchases/${purchase.id}'),
             ),
           ),
         );
-        ref.read(createPurchaseProvider.notifier).reset();
-        context.pop();
       }
       if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: AppColors.danger),
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     });
@@ -148,28 +158,34 @@ class _CreatePurchasePageState extends ConsumerState<CreatePurchasePage> {
       body: LoadingOverlay(
         isLoading: createState.isLoading,
         message: _isEditing ? 'Updating purchase...' : 'Creating purchase...',
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildSupplierSection(),
-              const SizedBox(height: 16),
-              _buildDateSection(),
-              const SizedBox(height: 16),
-              _buildLineItemsSection(),
-              const SizedBox(height: 16),
-              _buildPaymentStatusSection(),
-              const SizedBox(height: 16),
-              _buildTotalsSection(totals),
-              const SizedBox(height: 16),
-              _buildNotesSection(),
-              const SizedBox(height: 100),
-            ],
-          ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildSupplierSection(),
+                    const SizedBox(height: 16),
+                    _buildDateSection(),
+                    const SizedBox(height: 16),
+                    _buildLineItemsSection(),
+                    const SizedBox(height: 16),
+                    _buildPaymentStatusSection(),
+                    const SizedBox(height: 16),
+                    _buildTotalsSection(totals),
+                    const SizedBox(height: 16),
+                    _buildNotesSection(),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ),
+            _buildBottomBar(totals, createState.isLoading),
+          ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(totals, createState.isLoading),
     );
   }
 
@@ -407,14 +423,25 @@ class _CreatePurchasePageState extends ConsumerState<CreatePurchasePage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Taxable: ₹${taxable.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
-                Text('GST: ₹${gstAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.primary)),
-                Text('Total: ₹${total.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Text('Taxable: ₹${taxable.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('GST: ₹${gstAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.primary),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('Total: ₹${total.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis),
+                ),
               ],
             ),
           ),

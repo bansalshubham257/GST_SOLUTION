@@ -26,6 +26,10 @@ class DashboardStats {
   final double cardSales;
   final double totalCommission;
   final List<MonthlySales> monthlySales;
+  final double totalPurchases;
+  final double purchaseGst;
+  final double pendingPurchaseAmount;
+  final int purchaseCount;
 
   const DashboardStats({
     this.todaySales = 0,
@@ -44,6 +48,10 @@ class DashboardStats {
     this.cardSales = 0,
     this.totalCommission = 0,
     required this.monthlySales,
+    this.totalPurchases = 0,
+    this.purchaseGst = 0,
+    this.pendingPurchaseAmount = 0,
+    this.purchaseCount = 0,
   });
 
   static DashboardStats empty() => const DashboardStats(
@@ -190,6 +198,24 @@ DashboardStats _computeStatsFromCache() {
   final customers = LocalStorage.getAllCachedCustomers();
   final products = LocalStorage.getAllItemCatalog();
 
+  double totalPurchases = 0;
+  double purchaseGst = 0;
+  double pendingPurchaseAmount = 0;
+  int purchaseCount = 0;
+  final purchases = LocalStorage.getAllCachedPurchases();
+  for (final raw in purchases) {
+    final pur = Map<String, dynamic>.from(raw);
+    final status = (pur['status'] ?? '') as String;
+    if (status == 'cancelled') continue;
+    totalPurchases += (pur['grandTotal'] ?? 0).toDouble();
+    purchaseGst += (pur['totalTax'] ?? 0).toDouble();
+    purchaseCount++;
+    final paymentStatus = (pur['paymentStatus'] ?? 'unpaid') as String;
+    if (paymentStatus == 'unpaid') {
+      pendingPurchaseAmount += (pur['grandTotal'] ?? 0).toDouble();
+    }
+  }
+
   return DashboardStats(
     todaySales: todaySales,
     totalSales: totalSales,
@@ -207,6 +233,10 @@ DashboardStats _computeStatsFromCache() {
     cardSales: cardSales,
     totalCommission: totalCommission,
     monthlySales: monthlySales,
+    totalPurchases: totalPurchases,
+    purchaseGst: purchaseGst,
+    pendingPurchaseAmount: pendingPurchaseAmount,
+    purchaseCount: purchaseCount,
   );
 }
 

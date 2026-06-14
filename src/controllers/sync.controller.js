@@ -75,6 +75,11 @@ const syncAll = async (req, res, next) => {
             values
           );
         }
+        // Mark business setup as done on the user record when business data is synced
+        await client.query(
+          'UPDATE gst_app.users SET business_setup_done = true WHERE id = $1',
+          [req.userId]
+        );
       }
 
       // Upsert customers
@@ -321,7 +326,8 @@ const syncAll = async (req, res, next) => {
     // populate its local cache (e.g. after clear-data + login).
     let pulledData = null;
     if (businessId) {
-      const [custRows, prodRows, invRows, staffRows, invLineRows, purRows, purLineRows] = await Promise.all([
+      const [bizRows, custRows, prodRows, invRows, staffRows, invLineRows, purRows, purLineRows] = await Promise.all([
+        query('SELECT * FROM gst_app.businesses WHERE id = $1', [businessId]),
         query('SELECT * FROM gst_app.customers WHERE business_id = $1 ORDER BY name', [businessId]),
         query('SELECT * FROM gst_app.products WHERE business_id = $1 ORDER BY name', [businessId]),
         query('SELECT * FROM gst_app.invoices WHERE business_id = $1 ORDER BY created_at DESC', [businessId]),
@@ -348,6 +354,7 @@ const syncAll = async (req, res, next) => {
       }
 
       pulledData = {
+        business: bizRows.rows.length > 0 ? toCamel(bizRows.rows[0]) : null,
         customers: custRows.rows.map(r => toCamel(r)),
         products: prodRows.rows.map(r => toCamel(r)),
         invoices: invRows.rows.map(r => ({ ...toCamel(r), lineItems: (lineMap[r.id] || []).map(li => toCamel(li)) })),
