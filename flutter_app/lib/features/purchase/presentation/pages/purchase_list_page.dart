@@ -335,6 +335,63 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
               ],
             ),
           ),
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              final id = p['id'] ?? '';
+              if (id.isEmpty) return;
+              if (v == 'edit') {
+                context.push('/purchases/$id/edit');
+              } else if (v == 'delete') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Purchase'),
+                    content: Text(
+                      'Delete purchase ${p['purchaseNumber'] ?? ''}? This cannot be undone.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Delete',
+                            style: TextStyle(color: AppColors.danger)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await LocalStorage.deletePurchase(id.toString());
+                  setState(() {});
+                }
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading:
+                        Icon(Icons.edit_outlined, size: 18),
+                    title: Text('Edit'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+              const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline,
+                        size: 18, color: AppColors.danger),
+                    title: Text('Delete',
+                        style: TextStyle(color: AppColors.danger)),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+            ],
+            icon: const Icon(Icons.more_vert,
+                color: AppColors.textTertiaryLight, size: 20),
+          ),
         ],
       ),
     );

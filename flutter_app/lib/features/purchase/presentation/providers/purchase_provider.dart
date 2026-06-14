@@ -37,6 +37,12 @@ class PurchaseListNotifier extends AsyncNotifier<List<PurchaseEntity>> {
     state = const AsyncLoading();
     state = AsyncData(await _fetchPurchases(reset: true));
   }
+
+  Future<void> removePurchase(String id) async {
+    await LocalStorage.deletePurchase(id);
+    final current = state.valueOrNull ?? [];
+    state = AsyncData(current.where((p) => p.id != id).toList());
+  }
 }
 
 dynamic _deepConvert(dynamic value) {

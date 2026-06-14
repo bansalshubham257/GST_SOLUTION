@@ -69,7 +69,39 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
                   padding: const EdgeInsets.all(16),
                   itemCount: list.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _CustomerTile(customer: list[i]),
+                  itemBuilder: (_, i) => _CustomerTile(
+                    customer: list[i],
+                    onEdit: () => context.push(
+                      '${AppRoutes.customers}/${list[i].id}',
+                    ),
+                    onDelete: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete Customer'),
+                          content: Text(
+                            'Are you sure you want to delete "${list[i].name}"?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Delete',
+                                  style: TextStyle(color: AppColors.danger)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await ref
+                            .read(customerListProvider.notifier)
+                            .removeCustomer(list[i].id);
+                      }
+                    },
+                  ),
                 ),
               ),
         loading: () => ListView.separated(
@@ -93,13 +125,19 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
 
 class _CustomerTile extends StatelessWidget {
   final CustomerEntity customer;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _CustomerTile({required this.customer});
+  const _CustomerTile({
+    required this.customer,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      onTap: () => context.push('${AppRoutes.customers}/${customer.id}'),
+      onTap: onEdit,
       child: Row(
         children: [
           CircleAvatar(
@@ -136,7 +174,27 @@ class _CustomerTile extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 4),
-          const Icon(Icons.chevron_right, color: AppColors.textTertiaryLight, size: 20),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'edit') onEdit();
+              if (v == 'delete') onDelete();
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'edit', child: ListTile(
+                leading: Icon(Icons.edit_outlined, size: 18),
+                title: Text('Edit'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+              const PopupMenuItem(value: 'delete', child: ListTile(
+                leading: Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                title: Text('Delete', style: TextStyle(color: AppColors.danger)),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+            ],
+            icon: const Icon(Icons.more_vert, color: AppColors.textTertiaryLight, size: 20),
+          ),
         ],
       ),
     );

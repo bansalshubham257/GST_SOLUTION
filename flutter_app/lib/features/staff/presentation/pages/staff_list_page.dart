@@ -127,8 +127,55 @@ class StaffListPage extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right,
-                              color: AppColors.textTertiaryLight, size: 18),
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              if (v == 'delete') {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Delete Staff'),
+                                    content: Text(
+                                      'Are you sure you want to delete "${member.name}"?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Delete',
+                                            style: TextStyle(
+                                                color: AppColors.danger)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  await ref
+                                      .read(staffListProvider.notifier)
+                                      .deleteStaff(member.id);
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline,
+                                        size: 18, color: AppColors.danger),
+                                    title: Text('Delete',
+                                        style:
+                                            TextStyle(color: AppColors.danger)),
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  )),
+                            ],
+                            icon: const Icon(Icons.more_vert,
+                                color: AppColors.textTertiaryLight, size: 18),
+                          ),
                         ],
                       ),
                     ),

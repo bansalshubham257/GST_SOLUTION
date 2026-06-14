@@ -129,7 +129,8 @@ class CustomerListNotifier extends AsyncNotifier<List<CustomerEntity>> {
     state = AsyncData([customer, ...current]);
   }
 
-  void removeCustomer(String id) {
+  Future<void> removeCustomer(String id) async {
+    await LocalStorage.deleteCustomer(id);
     final current = state.valueOrNull ?? [];
     state = AsyncData(current.where((c) => c.id != id).toList());
   }

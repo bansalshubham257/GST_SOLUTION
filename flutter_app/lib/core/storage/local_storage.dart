@@ -75,6 +75,7 @@ class LocalStorage {
   static Map? getCachedPurchase(String id) => purchaseBox.get(id);
 
   static List<Map> getAllCachedPurchases() => purchaseBox.values.toList();
+  static Future<void> deletePurchase(String id) async => purchaseBox.delete(id);
 
   static Future<void> clearAll() async {
     await Future.wait([
@@ -139,6 +140,7 @@ class LocalStorage {
   static Map? getCachedInvoice(String id) => invoiceBox.get(id);
 
   static List<Map> getAllCachedInvoices() => invoiceBox.values.toList();
+  static Future<void> deleteInvoice(String id) async => invoiceBox.delete(id);
 
   // Cache customers offline
   static Future<void> cacheCustomer(String id, Map<String, dynamic> data) async {
@@ -148,6 +150,7 @@ class LocalStorage {
   static Map? getCachedCustomer(String id) => customerBox.get(id);
 
   static List<Map> getAllCachedCustomers() => customerBox.values.toList();
+  static Future<void> deleteCustomer(String id) async => customerBox.delete(id);
 
   // Save draft invoice
   static Future<void> saveDraft(String draftId, Map<String, dynamic> data) async {

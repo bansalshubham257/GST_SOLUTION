@@ -121,7 +121,8 @@ class InvoiceListNotifier extends AsyncNotifier<List<InvoiceEntity>> {
     state = AsyncData(await _fetchInvoices(reset: true));
   }
 
-  void removeInvoice(String id) {
+  Future<void> removeInvoice(String id) async {
+    await LocalStorage.deleteInvoice(id);
     final current = state.valueOrNull ?? [];
     state = AsyncData(current.where((inv) => inv.id != id).toList());
   }

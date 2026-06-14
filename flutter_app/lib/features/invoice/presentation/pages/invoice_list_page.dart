@@ -272,8 +272,6 @@ class _InvoiceListPageState extends ConsumerState<InvoiceListPage> {
         if (id.isEmpty) return;
         InvoiceEntity? entity;
         try {
-          // Hive stores nested maps as Map<dynamic,dynamic> which fails
-          // the Map<String,dynamic> cast in fromJson. Convert deeply.
           final converted = Map<String, dynamic>.from(inv);
           if (converted['lineItems'] is List) {
             converted['lineItems'] = (converted['lineItems'] as List)
@@ -342,6 +340,63 @@ class _InvoiceListPageState extends ConsumerState<InvoiceListPage> {
                 ],
               ],
             ),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              final id = inv['id'] ?? '';
+              if (id.isEmpty) return;
+              if (v == 'edit') {
+                context.push('${AppRoutes.serviceHistory}/${id}/edit');
+              } else if (v == 'delete') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Sale'),
+                    content: Text(
+                      'Delete sale ${inv['invoiceNumber'] ?? ''}? This cannot be undone.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Delete',
+                            style: TextStyle(color: AppColors.danger)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await LocalStorage.deleteInvoice(id.toString());
+                  setState(() {});
+                }
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading:
+                        Icon(Icons.edit_outlined, size: 18),
+                    title: Text('Edit'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+              const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline,
+                        size: 18, color: AppColors.danger),
+                    title: Text('Delete',
+                        style: TextStyle(color: AppColors.danger)),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+            ],
+            icon: const Icon(Icons.more_vert,
+                color: AppColors.textTertiaryLight, size: 20),
           ),
         ],
       ),

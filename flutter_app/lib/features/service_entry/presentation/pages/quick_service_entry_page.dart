@@ -678,7 +678,7 @@ class _QuickServiceEntryPageState
 
 // ─── Service Picker Bottom Sheet ─────────────────────────────────────────────
 
-class _ServicePickerSheet extends StatelessWidget {
+class _ServicePickerSheet extends StatefulWidget {
   final List<ItemCatalogEntry> services;
   final List<ItemCatalogEntry> products;
   final Function(ItemCatalogEntry) onSelect;
@@ -692,7 +692,32 @@ class _ServicePickerSheet extends StatelessWidget {
   });
 
   @override
+  State<_ServicePickerSheet> createState() => _ServicePickerSheetState();
+}
+
+class _ServicePickerSheetState extends State<_ServicePickerSheet> {
+  final _searchController = TextEditingController();
+  var _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ItemCatalogEntry> _filter(List<ItemCatalogEntry> items) {
+    if (_searchQuery.isEmpty) return items;
+    final q = _searchQuery.toLowerCase();
+    return items.where((i) =>
+        i.name.toLowerCase().contains(q) ||
+        (i.hsnCode ?? '').toLowerCase().contains(q)).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filteredServices = _filter(widget.services);
+    final filteredProducts = _filter(widget.products);
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.65,
       decoration: const BoxDecoration(
@@ -720,84 +745,122 @@ class _ServicePickerSheet extends StatelessWidget {
                 TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('New'),
-                  onPressed: onAddNew,
+                  onPressed: widget.onAddNew,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          if (services.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.content_cut,
-                      size: 14, color: AppColors.secondary),
-                  const SizedBox(width: 6),
-                  Text('SERVICES',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondary)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search items...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: AppColors.borderLight)),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 16),
+              children: [
+                if (filteredServices.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.content_cut,
+                            size: 14, color: AppColors.secondary),
+                        const SizedBox(width: 6),
+                        Text('SERVICES',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondary)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 80,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filteredServices.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) => _ServiceItem(
+                          item: filteredServices[i],
+                          onTap: () => widget.onSelect(filteredServices[i])),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 80,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: services.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) => _ServiceItem(
-                    item: services[i], onTap: () => onSelect(services[i])),
-              ),
-            ),
-          ],
-          if (products.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.inventory_2_outlined,
-                      size: 14, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  Text('PRODUCTS',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary)),
+                if (filteredProducts.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.inventory_2_outlined,
+                            size: 14, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text('PRODUCTS',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 80,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filteredProducts.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) => _ServiceItem(
+                          item: filteredProducts[i],
+                          onTap: () =>
+                              widget.onSelect(filteredProducts[i])),
+                    ),
+                  ),
                 ],
-              ),
+                if (filteredServices.isEmpty && filteredProducts.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Column(
+                      children: [
+                        Icon(Icons.inventory_2_outlined,
+                            size: 48, color: AppColors.textTertiaryLight),
+                        SizedBox(height: 12),
+                        Text('No items found',
+                            style: TextStyle(
+                                color: AppColors.textSecondaryLight)),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 80,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: products.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) => _ServiceItem(
-                    item: products[i], onTap: () => onSelect(products[i])),
-              ),
-            ),
-          ],
-          if (services.isEmpty && products.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: Column(
-                children: [
-                  Icon(Icons.inventory_2_outlined,
-                      size: 48, color: AppColors.textTertiaryLight),
-                  SizedBox(height: 12),
-                  Text('No services yet',
-                      style: TextStyle(color: AppColors.textSecondaryLight)),
-                ],
-              ),
-            ),
+          ),
         ],
       ),
     );
@@ -867,6 +930,7 @@ class _QuickCustomerPicker extends ConsumerStatefulWidget {
 
 class _QuickCustomerPickerState extends ConsumerState<_QuickCustomerPicker> {
   final _searchController = TextEditingController();
+  var _searchQuery = '';
 
   @override
   void dispose() {
@@ -876,7 +940,7 @@ class _QuickCustomerPickerState extends ConsumerState<_QuickCustomerPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(customerListProvider);
+    final customersAsync = ref.watch(customerListProvider);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.6,
@@ -903,6 +967,24 @@ class _QuickCustomerPickerState extends ConsumerState<_QuickCustomerPicker> {
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
+                TextButton.icon(
+                  icon: const Icon(Icons.person_add, size: 16),
+                  label: const Text('Add'),
+                  onPressed: () async {
+                    final result = await context.push(
+                      AppRoutes.addCustomer,
+                    );
+                    if (result is CustomerEntity && mounted) {
+                      Navigator.pop(context, {
+                        'id': result.id,
+                        'name': result.name,
+                        'phone': result.phone ?? '',
+                        'gstin': result.gstin ?? '',
+                        'state': result.state ?? '',
+                      });
+                    }
+                  },
+                ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Skip'),
@@ -910,34 +992,74 @@ class _QuickCustomerPickerState extends ConsumerState<_QuickCustomerPicker> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search customers...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: AppColors.borderLight)),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
-            child: customers.when(
-              data: (list) => list.isEmpty
-                  ? const Center(child: Text('No customers yet'))
-                  : ListView.builder(
-                      itemCount: list.length,
-                      itemBuilder: (_, i) => ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primarySurface,
-                          child: Text(list[i].name[0].toUpperCase(),
-                              style:
-                                  const TextStyle(color: AppColors.primary)),
-                        ),
-                        title: Text(list[i].name),
-                        subtitle: Text([list[i].phone, list[i].gstin]
-                            .whereType<String>()
-                            .where((s) => s.isNotEmpty)
-                            .join(' • ')),
-                        onTap: () => Navigator.pop(context, {
-                          'id': list[i].id,
-                          'name': list[i].name,
-                          'phone': list[i].phone ?? '',
-                          'gstin': list[i].gstin ?? '',
-                          'state': list[i].state ?? '',
-                        }),
-                      ),
+            child: customersAsync.when(
+              data: (list) {
+                final filtered = _searchQuery.isEmpty
+                    ? list
+                    : list.where((c) {
+                        final q = _searchQuery.toLowerCase();
+                        return c.name.toLowerCase().contains(q) ||
+                            (c.phone ?? '').contains(_searchQuery) ||
+                            (c.gstin ?? '').toLowerCase().contains(q);
+                      }).toList();
+
+                if (filtered.isEmpty) {
+                  return const Center(child: Text('No customers found'));
+                }
+
+                return ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primarySurface,
+                      child: Text(filtered[i].name[0].toUpperCase(),
+                          style:
+                              const TextStyle(color: AppColors.primary)),
                     ),
+                    title: Text(filtered[i].name),
+                    subtitle: Text([filtered[i].phone, filtered[i].gstin]
+                        .whereType<String>()
+                        .where((s) => s.isNotEmpty)
+                        .join(' • ')),
+                    onTap: () => Navigator.pop(context, {
+                      'id': filtered[i].id,
+                      'name': filtered[i].name,
+                      'phone': filtered[i].phone ?? '',
+                      'gstin': filtered[i].gstin ?? '',
+                      'state': filtered[i].state ?? '',
+                    }),
+                  ),
+                );
+              },
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
               error: (_, __) => const Center(child: Text('Error')),
