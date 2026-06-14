@@ -14,6 +14,7 @@ const adminRoutes = require('./admin.routes');
 const uploadRoutes = require('./upload.routes');
 const scanBillRoutes = require('./scan_bill.routes');
 const syncRoutes = require('./sync.routes');
+const purchaseRoutes = require('./purchase.routes');
 
 router.use('/auth', authRoutes);
 router.use('/business', businessRoutes);
@@ -27,6 +28,7 @@ router.use('/chat', chatRoutes);
 router.use('/admin', adminRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/sync', syncRoutes);
+router.use('/purchases', purchaseRoutes);
 
 module.exports = router;
 

@@ -6,6 +6,9 @@ import '../theme/app_colors.dart';
 import '../router/app_router.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
 import '../../features/staff/presentation/providers/staff_provider.dart';
+import '../../features/invoice/presentation/providers/invoice_provider.dart';
+import '../../features/purchase/presentation/providers/purchase_provider.dart';
+import '../../features/customer/presentation/providers/customer_provider.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -60,6 +63,15 @@ class _MainShellState extends ConsumerState<MainShell> {
           if (index == 1) {
             ref.invalidate(staffListProvider);
           }
+          if (index == 2) {
+            ref.invalidate(purchaseListProvider);
+          }
+          if (index == 3) {
+            ref.invalidate(customerListProvider);
+          }
+          if (index == 4) {
+            ref.invalidate(invoiceListProvider);
+          }
           widget.navigationShell.goBranch(
             index,
             initialLocation: index == widget.navigationShell.currentIndex,
@@ -110,18 +122,25 @@ class _BottomNavBar extends StatelessWidget {
               ),
               const SizedBox(width: 48),
               _NavItem(
+                icon: Icons.shopping_cart_outlined,
+                activeIcon: Icons.shopping_cart,
+                label: 'Purchase',
+                isActive: currentIndex == 2,
+                onTap: () => onTap(2),
+              ),
+              _NavItem(
                 icon: Icons.people_outline,
                 activeIcon: Icons.people,
                 label: 'Customers',
-                isActive: currentIndex == 2,
-                onTap: () => onTap(2),
+                isActive: currentIndex == 3,
+                onTap: () => onTap(3),
               ),
               _NavItem(
                 icon: Icons.inventory_2_outlined,
                 activeIcon: Icons.inventory_2,
                 label: 'Services',
-                isActive: currentIndex == 3,
-                onTap: () => onTap(3),
+                isActive: currentIndex == 4,
+                onTap: () => onTap(4),
               ),
             ],
           ),

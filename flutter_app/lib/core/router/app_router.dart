@@ -26,12 +26,17 @@ import '../../features/invoice/presentation/pages/item_catalog_page.dart';
 import '../../features/invoice/presentation/pages/add_item_page.dart';
 import '../../features/invoice/data/models/item_catalog_entry.dart';
 import '../../features/invoice/domain/entities/invoice_entity.dart';
+import '../../features/purchase/domain/entities/purchase_entity.dart';
 import '../../features/staff/presentation/pages/staff_list_page.dart';
 import '../../features/staff/presentation/pages/add_edit_staff_page.dart';
 import '../../features/staff/domain/entities/staff_entity.dart';
 import '../../features/expense/presentation/pages/expense_list_page.dart';
 import '../../features/expense/presentation/pages/add_edit_expense_page.dart';
 import '../../features/service_entry/presentation/pages/quick_service_entry_page.dart';
+import '../../features/purchase/presentation/pages/purchase_list_page.dart';
+import '../../features/purchase/presentation/pages/create_purchase_page.dart';
+import '../../features/purchase/presentation/pages/purchase_detail_page.dart';
+import '../../features/purchase/presentation/pages/purchase_preview_page.dart';
 import '../widgets/main_shell.dart';
 
 class AppRoutes {
@@ -64,6 +69,11 @@ class AppRoutes {
   static const String addExpense = '/expenses/add';
   static const String signup = '/signup';
   static const String profile = '/profile';
+  static const String purchases = '/purchases';
+  static const String createPurchase = '/purchases/create';
+  static const String editPurchase = '/purchases/:id/edit';
+  static const String purchaseDetail = '/purchases/:id';
+  static const String purchasePreview = '/purchases/:id/preview';
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -197,7 +207,47 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          // Branch 2: Customers
+          // Branch 2: Purchases
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.purchases,
+              name: 'purchases-tab',
+              builder: (context, state) => const PurchaseListPage(),
+              routes: [
+                GoRoute(
+                  path: 'create',
+                  name: 'create-purchase',
+                  builder: (context, state) => const CreatePurchasePage(),
+                ),
+                GoRoute(
+                  path: ':id',
+                  name: 'purchase-detail',
+                  builder: (context, state) {
+                    final extra = state.extra;
+                    return PurchaseDetailPage(
+                      purchaseId: state.pathParameters['id']!,
+                      initialPurchase: extra is PurchaseEntity ? extra : null,
+                    );
+                  },
+                  routes: [
+                    GoRoute(
+                      path: 'preview',
+                      name: 'purchase-preview',
+                      builder: (context, state) =>
+                          PurchasePreviewPage(purchaseId: state.pathParameters['id']!),
+                    ),
+                    GoRoute(
+                      path: 'edit',
+                      name: 'edit-purchase',
+                      builder: (context, state) =>
+                          CreatePurchasePage(purchaseId: state.pathParameters['id']!),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ]),
+          // Branch 3: Customers
           StatefulShellBranch(routes: [
             GoRoute(
               path: AppRoutes.customers,
@@ -218,7 +268,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          // Branch 3: Reports (Services, Expenses, GST)
+          // Branch 4: Reports (Services, Expenses, GST)
           StatefulShellBranch(routes: [
             GoRoute(
               path: AppRoutes.reports,

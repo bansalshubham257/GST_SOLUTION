@@ -20,8 +20,8 @@ const syncAll = async (req, res, next) => {
 
   // Find or create a business for this user
   let businessId = req.user.businessId || null;
-  const { customers, products, invoices, business, staff } = req.body;
-  const results = { customers: 0, products: 0, invoices: 0, staff: 0, errors: [] };
+  const { customers, products, invoices, business, staff, purchases } = req.body;
+  const results = { customers: 0, products: 0, invoices: 0, staff: 0, purchases: 0, errors: [] };
 
   try {
     await transaction(async (client) => {
@@ -214,6 +214,76 @@ const syncAll = async (req, res, next) => {
         }
       }
 
+      // Upsert purchases + line items
+      if (Array.isArray(purchases)) {
+        for (const inv of purchases) {
+          try {
+            await client.query('SAVEPOINT sp');
+            let invId = validUuid(inv.id) ? inv.id : null;
+            const lineItems = inv.line_items || inv.lineItems || [];
+            const existing = invId ? await client.query('SELECT id FROM gst_app.purchase_invoices WHERE id = $1', [invId]) : { rows: [] };
+            if (existing.rows.length > 0) {
+              await client.query(
+                `UPDATE gst_app.purchase_invoices SET purchase_number=$1,supplier_name=$2,
+                 supplier_gstin=$3,supplier_phone=$4,supplier_email=$5,supplier_address=$6,
+                 invoice_date=$7,due_date=$8,status=$9,payment_status=$10,is_inter_state=$11,
+                 sub_total=$12,total_cgst=$13,total_sgst=$14,total_igst=$15,total_cess=$16,
+                 total_tax=$17,discount_amount=$18,grand_total=$19,round_off=$20,notes=$21,
+                 terms_and_conditions=$22,gst_slabs=$23,updated_at=NOW() WHERE id=$24`,
+                [inv.purchase_number||inv.purchaseNumber, inv.supplier_name||inv.supplierName||'',
+                 inv.supplier_gstin||'', inv.supplier_phone||'', inv.supplier_email||'', inv.supplier_address||'',
+                 inv.invoice_date, inv.due_date, inv.status||'draft', inv.payment_status||'unpaid',
+                 inv.is_inter_state||false, inv.sub_total||0, inv.total_cgst||0, inv.total_sgst||0,
+                 inv.total_igst||0, inv.total_cess||0, inv.total_tax||0, inv.discount_amount||0,
+                 inv.grand_total||0, inv.round_off||0, inv.notes||'', inv.terms_and_conditions||'',
+                 JSON.stringify(inv.gst_slabs||[]), invId]
+              );
+              if (lineItems.length > 0) {
+                await client.query('DELETE FROM gst_app.purchase_invoice_line_items WHERE purchase_invoice_id = $1', [invId]);
+              }
+            } else {
+              const result = await client.query(
+                `INSERT INTO gst_app.purchase_invoices (id,business_id,purchase_number,supplier_name,
+                 supplier_gstin,supplier_phone,supplier_email,supplier_address,
+                 invoice_date,due_date,status,payment_status,is_inter_state,sub_total,total_cgst,total_sgst,total_igst,
+                 total_cess,total_tax,discount_amount,grand_total,round_off,notes,terms_and_conditions,gst_slabs)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+                 RETURNING id`,
+                [invId||uuidv4(), businessId, inv.purchase_number||inv.purchaseNumber||'',
+                 inv.supplier_name||inv.supplierName||'', inv.supplier_gstin||'', inv.supplier_phone||'',
+                 inv.supplier_email||'', inv.supplier_address||'', inv.invoice_date, inv.due_date,
+                 inv.status||'draft', inv.payment_status||'unpaid', inv.is_inter_state||false,
+                 inv.sub_total||0, inv.total_cgst||0, inv.total_sgst||0, inv.total_igst||0,
+                 inv.total_cess||0, inv.total_tax||0, inv.discount_amount||0,
+                 inv.grand_total||0, inv.round_off||0, inv.notes||'', inv.terms_and_conditions||'',
+                 JSON.stringify(inv.gst_slabs||[])]
+              );
+              invId = result.rows[0].id;
+            }
+
+            for (const li of lineItems) {
+              await client.query(
+                `INSERT INTO gst_app.purchase_invoice_line_items (id,purchase_invoice_id,description,hsn_sac_code,is_service,
+                 quantity,unit,unit_price,discount_percent,discount_amount,taxable_amount,gst_rate,
+                 cgst,sgst,igst,cess,total_amount,sort_order)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+                 ON CONFLICT (id) DO UPDATE SET description=EXCLUDED.description,quantity=EXCLUDED.quantity,
+                 unit_price=EXCLUDED.unit_price,taxable_amount=EXCLUDED.taxable_amount,total_amount=EXCLUDED.total_amount`,
+                [li.id||uuidv4(), invId, li.description, li.hsn_sac_code||'', li.is_service||false,
+                 li.quantity||1, li.unit||'nos', li.unit_price||0, li.discount_percent||0, li.discount_amount||0,
+                 li.taxable_amount||0, li.gst_rate||0, li.cgst||0, li.sgst||0, li.igst||0, li.cess||0,
+                 li.total_amount||0, li.sort_order||0]
+              );
+            }
+            await client.query('RELEASE SAVEPOINT sp');
+            results.purchases++;
+          } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sp');
+            results.errors.push({ type: 'purchase', id: inv.id, error: err.message });
+          }
+        }
+      }
+
       // Upsert staff
       if (Array.isArray(staff)) {
         for (const s of staff) {
@@ -251,13 +321,17 @@ const syncAll = async (req, res, next) => {
     // populate its local cache (e.g. after clear-data + login).
     let pulledData = null;
     if (businessId) {
-      const [custRows, prodRows, invRows, staffRows, invLineRows] = await Promise.all([
+      const [custRows, prodRows, invRows, staffRows, invLineRows, purRows, purLineRows] = await Promise.all([
         query('SELECT * FROM gst_app.customers WHERE business_id = $1 ORDER BY name', [businessId]),
         query('SELECT * FROM gst_app.products WHERE business_id = $1 ORDER BY name', [businessId]),
         query('SELECT * FROM gst_app.invoices WHERE business_id = $1 ORDER BY created_at DESC', [businessId]),
         query('SELECT * FROM gst_app.staff WHERE business_id = $1 ORDER BY name', [businessId]),
         query(`SELECT li.* FROM gst_app.invoice_line_items li
                JOIN gst_app.invoices i ON i.id = li.invoice_id
+               WHERE i.business_id = $1 ORDER BY li.sort_order`, [businessId]),
+        query('SELECT * FROM gst_app.purchase_invoices WHERE business_id = $1 ORDER BY created_at DESC', [businessId]),
+        query(`SELECT li.* FROM gst_app.purchase_invoice_line_items li
+               JOIN gst_app.purchase_invoices i ON i.id = li.purchase_invoice_id
                WHERE i.business_id = $1 ORDER BY li.sort_order`, [businessId]),
       ]);
 
@@ -267,11 +341,18 @@ const syncAll = async (req, res, next) => {
         lineMap[li.invoice_id].push(li);
       }
 
+      const purLineMap = {};
+      for (const li of purLineRows.rows) {
+        if (!purLineMap[li.purchase_invoice_id]) purLineMap[li.purchase_invoice_id] = [];
+        purLineMap[li.purchase_invoice_id].push(li);
+      }
+
       pulledData = {
         customers: custRows.rows.map(r => toCamel(r)),
         products: prodRows.rows.map(r => toCamel(r)),
         invoices: invRows.rows.map(r => ({ ...toCamel(r), lineItems: (lineMap[r.id] || []).map(li => toCamel(li)) })),
         staff: staffRows.rows.map(r => toCamel(r)),
+        purchases: purRows.rows.map(r => ({ ...toCamel(r), lineItems: (purLineMap[r.id] || []).map(li => toCamel(li)) })),
       };
     }
 

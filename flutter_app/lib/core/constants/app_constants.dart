@@ -18,6 +18,7 @@ class AppConstants {
   static const String staffBox = 'staff_box';
   static const String expenseBox = 'expense_box';
   static const String expenseCategoryBox = 'expense_category_box';
+  static const String purchaseBox = 'purchases_box';
 
   // Secure Storage Keys
   static const String tokenKey = 'auth_token';

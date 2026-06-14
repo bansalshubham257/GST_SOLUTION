@@ -20,6 +20,7 @@ class LocalStorage {
       Hive.openBox<Map>(AppConstants.staffBox),
       Hive.openBox<Map>(AppConstants.expenseBox),
       Hive.openBox<Map>(AppConstants.expenseCategoryBox),
+      Hive.openBox<Map>(AppConstants.purchaseBox),
     ]);
   }
 
@@ -34,6 +35,7 @@ class LocalStorage {
   static Box<Map> get staffBox => Hive.box<Map>(AppConstants.staffBox);
   static Box<Map> get expenseBox => Hive.box<Map>(AppConstants.expenseBox);
   static Box<Map> get expenseCategoryBox => Hive.box<Map>(AppConstants.expenseCategoryBox);
+  static Box<Map> get purchaseBox => Hive.box<Map>(AppConstants.purchaseBox);
 
   // Item Catalog
   static Future<void> saveItemCatalog(String id, Map<String, dynamic> data) async {
@@ -65,6 +67,15 @@ class LocalStorage {
   }
 
   /// Clear all cached data — call on logout or user switch
+  // Cache purchases offline
+  static Future<void> cachePurchase(String id, Map<String, dynamic> data) async {
+    await purchaseBox.put(id, data);
+  }
+
+  static Map? getCachedPurchase(String id) => purchaseBox.get(id);
+
+  static List<Map> getAllCachedPurchases() => purchaseBox.values.toList();
+
   static Future<void> clearAll() async {
     await Future.wait([
       invoiceBox.clear(),
@@ -77,6 +88,7 @@ class LocalStorage {
       staffBox.clear(),
       expenseBox.clear(),
       expenseCategoryBox.clear(),
+      purchaseBox.clear(),
     ]);
   }
 

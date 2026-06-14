@@ -1,98 +1,102 @@
-// lib/features/invoice/presentation/pages/invoice_detail_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/router/app_router.dart';
+
+import '../../../../core/storage/local_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_widgets.dart';
-import '../providers/invoice_provider.dart';
-import '../../domain/entities/invoice_entity.dart';
-import '../../data/services/invoice_pdf_service.dart';
+import '../providers/purchase_provider.dart';
+import '../../domain/entities/purchase_entity.dart';
+import '../../data/services/purchase_pdf_service.dart';
 
-class InvoiceDetailPage extends ConsumerWidget {
-  final String invoiceId;
-  final InvoiceEntity? initialInvoice;
+class PurchaseDetailPage extends ConsumerWidget {
+  final String purchaseId;
+  final PurchaseEntity? initialPurchase;
 
-  const InvoiceDetailPage({super.key, required this.invoiceId, this.initialInvoice});
+  const PurchaseDetailPage({super.key, required this.purchaseId, this.initialPurchase});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // If we have an invoice entity passed directly, display it (no provider lookup)
-    if (initialInvoice != null) {
-      debugPrint('[InvoiceDetail] Using initialInvoice id=${initialInvoice!.id}');
-      return _InvoiceDetailView(invoice: initialInvoice!);
+    if (initialPurchase != null) {
+      return _PurchaseDetailView(purchase: initialPurchase!);
     }
 
-    debugPrint('[InvoiceDetail] No initialInvoice, falling back to provider for $invoiceId');
-    final invoiceAsync = ref.watch(invoiceDetailProvider(invoiceId));
+    PurchaseEntity? loaded;
+    try {
+      final cached = LocalStorage.getCachedPurchase(purchaseId);
+      if (cached != null) {
+        final converted = Map<String, dynamic>.from(cached);
+        if (converted['lineItems'] is List) {
+          converted['lineItems'] = (converted['lineItems'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+        if (converted['gstSlabs'] is List) {
+          converted['gstSlabs'] = (converted['gstSlabs'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+        loaded = PurchaseEntityJson.fromJson(converted);
+      }
+    } catch (e) {
+      debugPrint('[PurchaseDetail] Load failed for $purchaseId: $e');
+    }
 
-    return invoiceAsync.when(
-      data: (invoice) => invoice == null
-          ? Scaffold(
-              appBar: AppBar(title: const Text('Invoice')),
-              body: const EmptyState(icon: Icons.receipt_long_outlined, title: 'Invoice not found', subtitle: ''),
-            )
-          : _InvoiceDetailView(invoice: invoice),
-      loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Invoice')),
-        body: const Center(child: CircularProgressIndicator()),
-      ),
-      error: (_, __) => Scaffold(
-        appBar: AppBar(title: const Text('Invoice')),
-        body: const EmptyState(icon: Icons.error_outline, title: 'Error', subtitle: 'Could not load invoice'),
-      ),
-    );
+    if (loaded == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Purchase')),
+        body: const EmptyState(icon: Icons.shopping_cart_outlined, title: 'Purchase not found', subtitle: ''),
+      );
+    }
+
+    return _PurchaseDetailView(purchase: loaded);
   }
 }
 
-class _InvoiceDetailView extends ConsumerStatefulWidget {
-  final InvoiceEntity invoice;
+class _PurchaseDetailView extends ConsumerStatefulWidget {
+  final PurchaseEntity purchase;
 
-  const _InvoiceDetailView({required this.invoice});
+  const _PurchaseDetailView({required this.purchase});
 
   @override
-  ConsumerState<_InvoiceDetailView> createState() => _InvoiceDetailViewState();
+  ConsumerState<_PurchaseDetailView> createState() => _PurchaseDetailViewState();
 }
 
-class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
+class _PurchaseDetailViewState extends ConsumerState<_PurchaseDetailView> {
   bool _isGeneratingPdf = false;
 
-  InvoiceEntity get invoice => widget.invoice;
+  PurchaseEntity get purchase => widget.purchase;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(invoice.invoiceNumber),
+        title: Text(purchase.purchaseNumber),
         actions: [
           IconButton(
             icon: const Icon(Icons.share_outlined),
-            onPressed: () => _shareInvoice(context),
+            onPressed: () => _sharePurchase(context),
           ),
           PopupMenuButton<String>(
             onSelected: (action) => _handleAction(context, ref, action),
             itemBuilder: (_) => [
-              if (invoice.isDraft)
+              if (purchase.isDraft)
                 const PopupMenuItem(value: 'edit', child: ListTile(
                   leading: Icon(Icons.edit_outlined), title: Text('Edit'), contentPadding: EdgeInsets.zero,
                 )),
-               const PopupMenuItem(value: 'quickPrint', child: ListTile(
-                 leading: Icon(Icons.print_outlined), title: Text('Quick Print'), contentPadding: EdgeInsets.zero,
-               )),
-               const PopupMenuItem(value: 'preview', child: ListTile(
-                 leading: Icon(Icons.preview_outlined), title: Text('Preview & Print'), contentPadding: EdgeInsets.zero,
-               )),
+              const PopupMenuItem(value: 'preview', child: ListTile(
+                leading: Icon(Icons.preview_outlined), title: Text('Preview & Print'), contentPadding: EdgeInsets.zero,
+              )),
               const PopupMenuItem(value: 'download', child: ListTile(
                 leading: Icon(Icons.download_outlined), title: Text('Download PDF'), contentPadding: EdgeInsets.zero,
               )),
               const PopupMenuItem(value: 'duplicate', child: ListTile(
                 leading: Icon(Icons.copy_outlined), title: Text('Duplicate'), contentPadding: EdgeInsets.zero,
               )),
-              if (!invoice.isCancelled)
+              if (!purchase.isCancelled)
                 const PopupMenuItem(value: 'cancel', child: ListTile(
-                  leading: Icon(Icons.cancel_outlined, color: AppColors.danger), title: Text('Cancel Invoice', style: TextStyle(color: AppColors.danger)), contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.cancel_outlined, color: AppColors.danger), title: Text('Cancel Purchase', style: TextStyle(color: AppColors.danger)), contentPadding: EdgeInsets.zero,
                 )),
             ],
           ),
@@ -108,16 +112,16 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
           children: [
             _buildStatusBanner(context),
             const SizedBox(height: 16),
-            _buildInvoiceMeta(context),
+            _buildPurchaseMeta(context),
             const SizedBox(height: 16),
-            _buildCustomerCard(context),
+            _buildSupplierCard(context),
             const SizedBox(height: 16),
             _buildLineItemsCard(context),
             const SizedBox(height: 16),
             _buildTaxSummaryCard(context),
             const SizedBox(height: 16),
             _buildTotalsCard(context),
-            if (invoice.notes != null) ...[
+            if (purchase.notes != null) ...[
               const SizedBox(height: 16),
               _buildNotesCard(context),
             ],
@@ -134,13 +138,11 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
     Color bg, fg;
     IconData icon;
 
-    switch (invoice.status.toLowerCase()) {
+    switch (purchase.status.toLowerCase()) {
       case 'paid':
         bg = AppColors.successLight; fg = AppColors.success; icon = Icons.check_circle;
-      case 'sent':
-        bg = AppColors.infoLight; fg = AppColors.info; icon = Icons.send;
-      case 'overdue':
-        bg = AppColors.dangerLight; fg = AppColors.danger; icon = Icons.warning;
+      case 'pending':
+        bg = AppColors.infoLight; fg = AppColors.info; icon = Icons.schedule;
       case 'cancelled':
         bg = AppColors.surfaceVariantLight; fg = AppColors.textSecondaryLight; icon = Icons.cancel;
       default:
@@ -155,12 +157,12 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
           Icon(icon, color: fg, size: 20),
           const SizedBox(width: 8),
           Text(
-            invoice.status.toUpperCase(),
+            purchase.status.toUpperCase(),
             style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13),
           ),
           const Spacer(),
           Text(
-            'Created ${DateFormat('dd MMM yyyy').format(invoice.createdAt)}',
+            'Created ${DateFormat('dd MMM yyyy').format(purchase.createdAt)}',
             style: TextStyle(color: fg.withOpacity(0.8), fontSize: 12),
           ),
         ],
@@ -168,21 +170,21 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
     );
   }
 
-  Widget _buildInvoiceMeta(BuildContext context) {
+  Widget _buildPurchaseMeta(BuildContext context) {
     return AppCard(
       child: Row(
         children: [
           Expanded(
-            child: _metaItem(context, 'Invoice No.', invoice.invoiceNumber),
+            child: _metaItem(context, 'Purchase No.', purchase.purchaseNumber),
           ),
           const VerticalDivider(width: 24, indent: 8, endIndent: 8),
           Expanded(
-            child: _metaItem(context, 'Invoice Date', DateFormat('dd MMM yyyy').format(invoice.invoiceDate)),
+            child: _metaItem(context, 'Invoice Date', DateFormat('dd MMM yyyy').format(purchase.invoiceDate)),
           ),
-          if (invoice.dueDate != null) ...[
+          if (purchase.dueDate != null) ...[
             const VerticalDivider(width: 24, indent: 8, endIndent: 8),
             Expanded(
-              child: _metaItem(context, 'Due Date', DateFormat('dd MMM yyyy').format(invoice.dueDate!)),
+              child: _metaItem(context, 'Due Date', DateFormat('dd MMM yyyy').format(purchase.dueDate!)),
             ),
           ],
         ],
@@ -201,51 +203,51 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
     );
   }
 
-  Widget _buildCustomerCard(BuildContext context) {
+  Widget _buildSupplierCard(BuildContext context) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bill To', style: Theme.of(context).textTheme.bodySmall),
+          Text('Supplier', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(invoice.customerName, style: Theme.of(context).textTheme.titleMedium),
-          if (invoice.customerGstin != null) ...[
+          Text(purchase.supplierName, style: Theme.of(context).textTheme.titleMedium),
+          if (purchase.supplierGstin != null) ...[
             const SizedBox(height: 4),
             Row(children: [
               const Icon(Icons.business, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Text('GSTIN: ${invoice.customerGstin}', style: Theme.of(context).textTheme.bodySmall),
+              Text('GSTIN: ${purchase.supplierGstin}', style: Theme.of(context).textTheme.bodySmall),
             ]),
           ],
-          if (invoice.customerPhone != null) ...[
+          if (purchase.supplierPhone != null) ...[
             const SizedBox(height: 2),
             Row(children: [
               const Icon(Icons.phone_outlined, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Text(invoice.customerPhone!, style: Theme.of(context).textTheme.bodySmall),
+              Text(purchase.supplierPhone!, style: Theme.of(context).textTheme.bodySmall),
             ]),
           ],
-          if (invoice.customerAddress != null) ...[
+          if (purchase.supplierAddress != null) ...[
             const SizedBox(height: 2),
             Row(children: [
               const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Expanded(child: Text(invoice.customerAddress!, style: Theme.of(context).textTheme.bodySmall)),
+              Expanded(child: Text(purchase.supplierAddress!, style: Theme.of(context).textTheme.bodySmall)),
             ]),
           ],
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: invoice.isInterState ? AppColors.accentSurface : AppColors.primarySurface,
+              color: purchase.isInterState ? AppColors.accentSurface : AppColors.primarySurface,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              invoice.isInterState ? 'Inter-state (IGST)' : 'Intra-state (CGST+SGST)',
+              purchase.isInterState ? 'Inter-state (IGST)' : 'Intra-state (CGST+SGST)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: invoice.isInterState ? AppColors.accent : AppColors.primary,
+                color: purchase.isInterState ? AppColors.accent : AppColors.primary,
               ),
             ),
           ),
@@ -262,16 +264,16 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('Services', style: Theme.of(context).textTheme.titleMedium),
+            child: Text('Items / Services', style: Theme.of(context).textTheme.titleMedium),
           ),
           const Divider(height: 1),
-          ...invoice.lineItems.map((item) => _buildLineItem(context, item)),
+          ...purchase.lineItems.map((item) => _buildLineItem(context, item)),
         ],
       ),
     );
   }
 
-  Widget _buildLineItem(BuildContext context, InvoiceLineItemEntity item) {
+  Widget _buildLineItem(BuildContext context, PurchaseLineItemEntity item) {
     return Column(
       children: [
         Padding(
@@ -325,7 +327,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
   );
 
   Widget _buildTaxSummaryCard(BuildContext context) {
-    if (invoice.gstSlabs.isEmpty) return const SizedBox.shrink();
+    if (purchase.gstSlabs.isEmpty) return const SizedBox.shrink();
 
     return AppCard(
       child: Column(
@@ -336,11 +338,11 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
           Table(
             columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1), 2: FlexColumnWidth(1), 3: FlexColumnWidth(1)},
             children: [
-              _tableHeader(['GST Rate', invoice.isInterState ? 'IGST' : 'CGST', invoice.isInterState ? '' : 'SGST', 'Taxable']),
-              ...invoice.gstSlabs.map((slab) => _tableRow([
+              _tableHeader(['GST Rate', purchase.isInterState ? 'IGST' : 'CGST', purchase.isInterState ? '' : 'SGST', 'Taxable']),
+              ...purchase.gstSlabs.map((slab) => _tableRow([
                 '${slab.rate.toInt()}%',
-                invoice.isInterState ? '₹${slab.igst.toStringAsFixed(2)}' : '₹${slab.cgst.toStringAsFixed(2)}',
-                invoice.isInterState ? '' : '₹${slab.sgst.toStringAsFixed(2)}',
+                purchase.isInterState ? '₹${slab.igst.toStringAsFixed(2)}' : '₹${slab.cgst.toStringAsFixed(2)}',
+                purchase.isInterState ? '' : '₹${slab.sgst.toStringAsFixed(2)}',
                 '₹${slab.taxableAmount.toStringAsFixed(2)}',
               ])),
             ],
@@ -370,23 +372,23 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
       color: AppColors.primarySurface,
       child: Column(
         children: [
-          _totalRow(context, 'Sub Total', invoice.subTotal),
-          if (!invoice.isInterState) ...[
-            _totalRow(context, 'CGST', invoice.totalCgst, color: AppColors.cgstColor),
-            _totalRow(context, 'SGST', invoice.totalSgst, color: AppColors.sgstColor),
+          _totalRow(context, 'Sub Total', purchase.subTotal),
+          if (!purchase.isInterState) ...[
+            _totalRow(context, 'CGST', purchase.totalCgst, color: AppColors.cgstColor),
+            _totalRow(context, 'SGST', purchase.totalSgst, color: AppColors.sgstColor),
           ],
-          if (invoice.isInterState)
-            _totalRow(context, 'IGST', invoice.totalIgst, color: AppColors.igstColor),
-          if (invoice.totalCess > 0) _totalRow(context, 'Cess', invoice.totalCess),
+          if (purchase.isInterState)
+            _totalRow(context, 'IGST', purchase.totalIgst, color: AppColors.igstColor),
+          if (purchase.totalCess > 0) _totalRow(context, 'Cess', purchase.totalCess),
           const Divider(),
-          if (invoice.roundOff != 0) _totalRow(context, 'Round Off', invoice.roundOff),
+          if (purchase.roundOff != 0) _totalRow(context, 'Round Off', purchase.roundOff),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('TOTAL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               Text(
-                '₹${invoice.grandTotal.toStringAsFixed(2)}',
+                '₹${purchase.grandTotal.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.primary),
               ),
             ],
@@ -416,7 +418,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
         children: [
           Text('Notes', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(invoice.notes!, style: Theme.of(context).textTheme.bodyMedium),
+          Text(purchase.notes!, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );
@@ -437,7 +439,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
                 label: 'Preview',
                 isOutlined: true,
                 icon: Icons.preview_outlined,
-                onPressed: () => context.push('${AppRoutes.serviceHistory}/${invoice.id}/preview'),
+                onPressed: () => context.push('/purchases/${purchase.id}/preview'),
               ),
             ),
             const SizedBox(width: 12),
@@ -459,28 +461,21 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
   void _handleAction(BuildContext context, WidgetRef ref, String action) {
     switch (action) {
       case 'edit':
-        context.push('${AppRoutes.serviceHistory}/${invoice.id}/edit');
+        context.push('/purchases/${purchase.id}/edit');
       case 'preview':
-        context.push('${AppRoutes.serviceHistory}/${invoice.id}/preview');
-      case 'quickPrint':
-        _quickPrint(context);
+        context.push('/purchases/${purchase.id}/preview');
       case 'download':
         _downloadPdf(context);
       case 'duplicate':
-        // TODO: duplicate
         break;
       case 'cancel':
         _confirmCancel(context, ref);
     }
   }
 
-  Future<void> _quickPrint(BuildContext context) async {
-    await InvoicePdfService.printInvoice(invoice);
-  }
-
   Future<void> _downloadPdf(BuildContext context) async {
-    await InvoicePdfService.downloadAndShare(
-      invoice,
+    await PurchasePdfService.downloadAndShare(
+      purchase,
       context,
       onLoading: (loading) {
         if (mounted) setState(() => _isGeneratingPdf = loading);
@@ -488,9 +483,8 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
     );
   }
 
-  Future<void> _shareInvoice(BuildContext context) async {
-    // Share the actual PDF instead of plain text
-    await InvoicePdfService.downloadAndShare(invoice, context,
+  Future<void> _sharePurchase(BuildContext context) async {
+    await PurchasePdfService.downloadAndShare(purchase, context,
         onLoading: (loading) {
       if (mounted) setState(() => _isGeneratingPdf = loading);
     });
@@ -500,21 +494,20 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Cancel Invoice?'),
-        content: const Text('This action cannot be undone. The invoice will be marked as cancelled.'),
+        title: const Text('Cancel Purchase?'),
+        content: const Text('This action cannot be undone. The purchase will be marked as cancelled.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Keep')),
           ElevatedButton(
             onPressed: () {
-              ref.read(createInvoiceProvider.notifier).cancelInvoice(invoice.id);
+              ref.read(createPurchaseProvider.notifier).cancelPurchase(purchase.id);
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Cancel Invoice'),
+            child: const Text('Cancel Purchase'),
           ),
         ],
       ),
     );
   }
 }
-

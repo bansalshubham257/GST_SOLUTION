@@ -76,6 +76,13 @@ class ApiConstants {
   static const String adminStats = '/admin/stats';
   static const String adminLogs = '/admin/logs';
 
+  // Purchases
+  static const String purchases = '/purchases';
+  static const String purchaseById = '/purchases/:id';
+  static const String createPurchase = '/purchases';
+  static const String cancelPurchase = '/purchases/:id/cancel';
+  static const String duplicatePurchase = '/purchases/:id/duplicate';
+
   // Sync
   static const String syncAll = '/sync';
 }

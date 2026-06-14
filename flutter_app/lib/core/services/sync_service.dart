@@ -23,12 +23,15 @@ class SyncService {
       final business = _getBusinessData();
       final staff = _getAllStaff();
 
+      final purchases = _getAllPurchases();
+
       final body = <String, dynamic>{};
       if (business != null) body['business'] = business;
       if (customers.isNotEmpty) body['customers'] = customers;
       if (products.isNotEmpty) body['products'] = products;
       if (invoices.isNotEmpty) body['invoices'] = invoices;
       if (staff.isNotEmpty) body['staff'] = staff;
+      if (purchases.isNotEmpty) body['purchases'] = purchases;
 
       final response = await _apiClient.post(ApiConstants.syncAll, data: body);
       final result = response.data as Map<String, dynamic>;
@@ -70,6 +73,12 @@ class SyncService {
       final map = Map<String, dynamic>.from(s);
       if (map['id'] != null) await LocalStorage.staffBox.put(map['id'].toString(), map);
     }
+
+    final purchases = (data['purchases'] as List?) ?? [];
+    for (final p in purchases) {
+      final map = Map<String, dynamic>.from(p);
+      if (map['id'] != null) await LocalStorage.cachePurchase(map['id'].toString(), map);
+    }
   }
 
   Map<String, dynamic>? _getBusinessData() {
@@ -100,6 +109,11 @@ class SyncService {
   List<Map<String, dynamic>> _getAllStaff() {
     final box = Hive.box<Map>(AppConstants.staffBox);
     return box.values.map((m) => _mapStaff(m)).toList();
+  }
+
+  List<Map<String, dynamic>> _getAllPurchases() {
+    final box = Hive.box<Map>(AppConstants.purchaseBox);
+    return box.values.map((m) => _mapPurchase(m)).toList();
   }
 
   Map<String, dynamic> _mapCustomer(Map raw) {
@@ -140,6 +154,42 @@ class SyncService {
       'commission_percentage': (m['commissionPercentage'] ?? 0).toDouble(),
       'total_revenue': (m['totalRevenue'] ?? 0).toDouble(),
       'total_commission': (m['totalCommission'] ?? 0).toDouble(),
+    };
+  }
+
+  Map<String, dynamic> _mapPurchase(Map raw) {
+    final m = _toMap(raw);
+    final lineItems = (m['lineItems'] as List<dynamic>?)
+            ?.map((li) => _mapLineItem(li as Map))
+            .toList() ??
+        [];
+
+    return {
+      'id': m['id'],
+      'purchase_number': m['purchaseNumber'] ?? '',
+      'supplier_name': m['supplierName'] ?? '',
+      'supplier_gstin': m['supplierGstin'] ?? '',
+      'supplier_phone': m['supplierPhone'] ?? '',
+      'supplier_email': m['supplierEmail'] ?? '',
+      'supplier_address': m['supplierAddress'] ?? '',
+      'invoice_date': m['invoiceDate'],
+      'due_date': m['dueDate'],
+      'status': m['status'] ?? 'draft',
+      'payment_status': m['paymentStatus'] ?? 'unpaid',
+      'is_inter_state': m['isInterState'] ?? false,
+      'sub_total': (m['subTotal'] ?? 0).toDouble(),
+      'total_cgst': (m['totalCgst'] ?? 0).toDouble(),
+      'total_sgst': (m['totalSgst'] ?? 0).toDouble(),
+      'total_igst': (m['totalIgst'] ?? 0).toDouble(),
+      'total_cess': (m['totalCess'] ?? 0).toDouble(),
+      'total_tax': (m['totalTax'] ?? 0).toDouble(),
+      'discount_amount': (m['discountAmount'] ?? 0).toDouble(),
+      'grand_total': (m['grandTotal'] ?? 0).toDouble(),
+      'round_off': (m['roundOff'] ?? 0).toDouble(),
+      'notes': m['notes'] ?? '',
+      'terms_and_conditions': m['termsAndConditions'] ?? '',
+      'gst_slabs': m['gstSlabs'] ?? [],
+      'line_items': lineItems,
     };
   }
 
