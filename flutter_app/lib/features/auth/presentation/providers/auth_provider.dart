@@ -377,8 +377,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await GoogleSignIn().signOut();
       } catch (_) {}
     }
-    await LocalStorage.clearAll();
+    // Keep lastUserId so re-login as same user preserves local data.
+    final lastUserId = await SecureStorage.read(AppConstants.lastUserIdKey);
     await SecureStorage.deleteAll();
+    if (lastUserId != null) {
+      await SecureStorage.write(AppConstants.lastUserIdKey, lastUserId);
+    }
     state = const AsyncData(AuthState(isLoggedIn: false));
   }
 
