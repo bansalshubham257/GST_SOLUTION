@@ -64,6 +64,22 @@ class LocalStorage {
     await box.clear();
   }
 
+  /// Clear all cached data — call on logout or user switch
+  static Future<void> clearAll() async {
+    await Future.wait([
+      invoiceBox.clear(),
+      customerBox.clear(),
+      businessBox.clear(),
+      userBox.clear(),
+      settingsBox.clear(),
+      draftBox.clear(),
+      itemCatalogBox.clear(),
+      staffBox.clear(),
+      expenseBox.clear(),
+      expenseCategoryBox.clear(),
+    ]);
+  }
+
   /// Migrate existing cached invoices: recompute gstSlabs from lineItems
   static Future<void> migrateInvoiceSlabs() async {
     final keys = invoiceBox.keys.toList();

@@ -24,6 +24,7 @@ class AppConstants {
   static const String refreshTokenKey = 'refresh_token';
   static const String userIdKey = 'user_id';
   static const String businessIdKey = 'business_id';
+  static const String lastUserIdKey = 'last_user_id';
 
   // GST Rate Slabs (hidden from daily use)
   static const List<double> gstRates = [0, 5, 12, 18, 28];

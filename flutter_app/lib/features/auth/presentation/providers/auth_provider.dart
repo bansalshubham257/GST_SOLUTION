@@ -158,6 +158,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await SecureStorage.write(AppConstants.businessIdKey, userEntity.businessId!);
       }
 
+      await _ensureDataIsolation(userEntity.id);
+
       state = AsyncData(AuthState(
         isLoggedIn: true,
         isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
@@ -201,6 +203,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       await SecureStorage.write(AppConstants.tokenKey, token);
       await SecureStorage.write(AppConstants.userIdKey, userEntity.id);
 
+      await _ensureDataIsolation(userEntity.id);
+
       state = AsyncData(AuthState(
         isLoggedIn: true,
         isBusinessSetupDone: false,
@@ -232,6 +236,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       businessId: 'local-business',
       createdAt: DateTime.now(),
     );
+    await _ensureDataIsolation(localUser.id);
     state = AsyncData(AuthState(
       isLoggedIn: true,
       isBusinessSetupDone: true,
@@ -372,11 +377,21 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await GoogleSignIn().signOut();
       } catch (_) {}
     }
+    await LocalStorage.clearAll();
     await SecureStorage.deleteAll();
     state = const AsyncData(AuthState(isLoggedIn: false));
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  /// Clear local Hive cache if this is a different user than the last session.
+  Future<void> _ensureDataIsolation(String newUserId) async {
+    final lastUserId = await SecureStorage.read(AppConstants.lastUserIdKey);
+    if (lastUserId != null && lastUserId != newUserId) {
+      await LocalStorage.clearAll();
+    }
+    await SecureStorage.write(AppConstants.lastUserIdKey, newUserId);
+  }
 
   Future<void> _signInWithCredential(AuthCredential credential) async {
     final result = await _firebaseAuth.signInWithCredential(credential);
@@ -408,6 +423,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         await SecureStorage.write(AppConstants.businessIdKey, userEntity.businessId!);
       }
 
+      await _ensureDataIsolation(userEntity.id);
+
       state = AsyncData(AuthState(
         isLoggedIn: true,
         isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
@@ -422,6 +439,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         photoUrl: user.photoURL,
         createdAt: DateTime.now(),
       );
+
+      await _ensureDataIsolation(userEntity.id);
+
       state = AsyncData(AuthState(
         isLoggedIn: true,
         isBusinessSetupDone: false,
