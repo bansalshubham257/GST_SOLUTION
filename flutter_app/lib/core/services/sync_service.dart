@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_constants.dart';
 import '../network/api_client.dart';
+import '../storage/local_storage.dart';
 import '../storage/secure_storage.dart';
 
 class SyncService {
@@ -11,8 +12,9 @@ class SyncService {
 
   SyncService(this._apiClient);
 
-  /// Full sync: push all local data to backend.
-  /// Returns true on success (partial errors allowed).
+  /// Full sync: push all local data to backend, then save pulled data to Hive.
+  /// This is bidirectional — after pushing, the backend returns all business
+  /// data so the local cache can be rebuilt (e.g. after clear-data + login).
   Future<bool> syncAll() async {
     try {
       final customers = _getAllCustomers();
@@ -20,10 +22,6 @@ class SyncService {
       final invoices = _getAllInvoices();
       final business = _getBusinessData();
       final staff = _getAllStaff();
-
-      if (customers.isEmpty && products.isEmpty && invoices.isEmpty && staff.isEmpty && business == null) {
-        return true; // nothing to sync
-      }
 
       final body = <String, dynamic>{};
       if (business != null) body['business'] = business;
@@ -36,10 +34,41 @@ class SyncService {
       final result = response.data as Map<String, dynamic>;
       if (result['success'] != true) return false;
 
+      final pulled = result['data'] as Map<String, dynamic>?;
+      if (pulled != null) {
+        await _savePulledData(pulled);
+      }
+
       await SecureStorage.write('last_sync_at', DateTime.now().toIso8601String());
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> _savePulledData(Map<String, dynamic> data) async {
+    final customers = (data['customers'] as List?) ?? [];
+    for (final c in customers) {
+      final map = Map<String, dynamic>.from(c);
+      if (map['id'] != null) await LocalStorage.cacheCustomer(map['id'].toString(), map);
+    }
+
+    final products = (data['products'] as List?) ?? [];
+    for (final p in products) {
+      final map = Map<String, dynamic>.from(p);
+      if (map['id'] != null) await LocalStorage.saveItemCatalog(map['id'].toString(), map);
+    }
+
+    final invoices = (data['invoices'] as List?) ?? [];
+    for (final inv in invoices) {
+      final map = Map<String, dynamic>.from(inv);
+      if (map['id'] != null) await LocalStorage.cacheInvoice(map['id'].toString(), map);
+    }
+
+    final staff = (data['staff'] as List?) ?? [];
+    for (final s in staff) {
+      final map = Map<String, dynamic>.from(s);
+      if (map['id'] != null) await LocalStorage.staffBox.put(map['id'].toString(), map);
     }
   }
 

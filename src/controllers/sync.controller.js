@@ -247,10 +247,49 @@ const syncAll = async (req, res, next) => {
       }
     });
 
-    res.json({ success: true, ...results });
+    // After a successful push, return all business data so the client can
+    // populate its local cache (e.g. after clear-data + login).
+    let pulledData = null;
+    if (businessId) {
+      const [custRows, prodRows, invRows, staffRows, invLineRows] = await Promise.all([
+        query('SELECT * FROM gst_app.customers WHERE business_id = $1 ORDER BY name', [businessId]),
+        query('SELECT * FROM gst_app.products WHERE business_id = $1 ORDER BY name', [businessId]),
+        query('SELECT * FROM gst_app.invoices WHERE business_id = $1 ORDER BY created_at DESC', [businessId]),
+        query('SELECT * FROM gst_app.staff WHERE business_id = $1 ORDER BY name', [businessId]),
+        query(`SELECT li.* FROM gst_app.invoice_line_items li
+               JOIN gst_app.invoices i ON i.id = li.invoice_id
+               WHERE i.business_id = $1 ORDER BY li.sort_order`, [businessId]),
+      ]);
+
+      const lineMap = {};
+      for (const li of invLineRows.rows) {
+        if (!lineMap[li.invoice_id]) lineMap[li.invoice_id] = [];
+        lineMap[li.invoice_id].push(li);
+      }
+
+      pulledData = {
+        customers: custRows.rows.map(r => toCamel(r)),
+        products: prodRows.rows.map(r => toCamel(r)),
+        invoices: invRows.rows.map(r => ({ ...toCamel(r), lineItems: (lineMap[r.id] || []).map(li => toCamel(li)) })),
+        staff: staffRows.rows.map(r => toCamel(r)),
+      };
+    }
+
+    res.json({ success: true, ...results, data: pulledData });
   } catch (err) {
     next(err);
   }
 };
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function toCamel(row) {
+  const out = {};
+  for (const key of Object.keys(row)) {
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    out[camel] = row[key];
+  }
+  return out;
+}
 
 module.exports = { syncAll };
