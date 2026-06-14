@@ -26,6 +26,10 @@ class InvoicePdfService {
   static String? _businessName;
   static String? _gstinLine;
   static String? _businessAddressFull;
+  static String _signatureText = '';
+  static String _templateStyle = 'classic';
+  static PdfColor _primaryColor = PdfColor.fromHex('#2563EB');
+  static PdfColor _primaryBg = PdfColor.fromHex('#EFF6FF');
 
   static void _loadBusinessData() {
     if (_businessName != null) return;
@@ -47,6 +51,27 @@ class InvoicePdfService {
     ].join(', ');
   }
 
+  static void _loadTemplateSettings() {
+    final sBox = LocalStorage.settingsBox;
+    _templateStyle = sBox.get('invoice_template', defaultValue: 'classic') as String;
+    _signatureText = sBox.get('invoice_signature',
+            defaultValue:
+                'This is a computer-generated invoice and does not require a signature.')
+        as String;
+
+    switch (_templateStyle) {
+      case 'modern':
+        _primaryColor = PdfColor.fromHex('#059669');
+        _primaryBg = PdfColor.fromHex('#ECFDF5');
+      case 'minimal':
+        _primaryColor = PdfColor.fromHex('#475569');
+        _primaryBg = PdfColor.fromHex('#F1F5F9');
+      default:
+        _primaryColor = PdfColor.fromHex('#2563EB');
+        _primaryBg = PdfColor.fromHex('#EFF6FF');
+    }
+  }
+
   static Future<Uint8List> generatePdf(
     InvoiceEntity invoice, {
     PdfPageFormat format = PdfPageFormat.a4,
@@ -56,6 +81,7 @@ class InvoicePdfService {
     _businessAddressFull = null;
 
     _loadBusinessData();
+    _loadTemplateSettings();
 
     final pdf = pw.Document();
 
@@ -66,7 +92,7 @@ class InvoicePdfService {
         build: (ctx) => [
           _buildHeader(invoice),
           pw.SizedBox(height: 20),
-          pw.Divider(thickness: 2, color: PdfColor.fromHex('#2563EB')),
+          pw.Divider(thickness: 2, color: _primaryColor),
           pw.SizedBox(height: 16),
           _buildCustomerSection(invoice),
           pw.SizedBox(height: 20),
@@ -208,7 +234,7 @@ class InvoicePdfService {
               style: pw.TextStyle(
                 fontSize: 24,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColor.fromHex('#2563EB'),
+                color: _primaryColor,
               ),
             ),
             pw.SizedBox(height: 4),
@@ -229,7 +255,7 @@ class InvoicePdfService {
           width: 140,
           height: 60,
           decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#EFF6FF'),
+            color: _primaryBg,
             borderRadius: pw.BorderRadius.circular(8),
           ),
           child: pw.Center(
@@ -237,7 +263,7 @@ class InvoicePdfService {
               _businessName ?? 'Business Name',
               style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
-                  color: PdfColor.fromHex('#2563EB'),
+                  color: _primaryColor,
                   fontSize: 12),
               textAlign: pw.TextAlign.center,
             ),
@@ -321,7 +347,7 @@ class InvoicePdfService {
         // Header row
         pw.TableRow(
           decoration:
-              pw.BoxDecoration(color: PdfColor.fromHex('#2563EB')),
+              pw.BoxDecoration(color: _primaryColor),
           children: ['Description', 'Qty', 'Rate', 'GST%', 'Amount']
               .map(
                 (h) => pw.Padding(
@@ -427,10 +453,10 @@ class InvoicePdfService {
           width: 240,
           padding: const pw.EdgeInsets.all(12),
           decoration: pw.BoxDecoration(
-            color: PdfColor.fromHex('#EFF6FF'),
+            color: _primaryBg,
             borderRadius: pw.BorderRadius.circular(8),
             border: pw.Border.all(
-                color: PdfColor.fromHex('#2563EB'), width: 0.5),
+                color: _primaryColor, width: 0.5),
           ),
           child: pw.Column(
             children: [
@@ -452,12 +478,12 @@ class InvoicePdfService {
                       style: pw.TextStyle(
                           fontWeight: pw.FontWeight.bold,
                           fontSize: 14)),
-                  pw.Text(
-                      'Rs. ${invoice.grandTotal.toStringAsFixed(2)}',
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 16,
-                          color: PdfColor.fromHex('#2563EB')),),
+                      pw.Text(
+                          'Rs. ${invoice.grandTotal.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 16,
+                              color: _primaryColor),),
                 ],
               ),
             ],
@@ -511,7 +537,7 @@ class InvoicePdfService {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'This is a computer-generated invoice and does not require a signature.',
+              _signatureText,
               style: const pw.TextStyle(
                   fontSize: 9, color: PdfColors.grey600),
             ),

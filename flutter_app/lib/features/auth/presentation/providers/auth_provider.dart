@@ -488,10 +488,21 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     );
   }
 
-  /// If backend says business is set up but local flag is missing (e.g. after clear data), sync it.
+  /// Sync local setup flag and business data from server.
   Future<void> _syncBusinessFlag(UserEntity user) async {
     if (user.isBusinessSetupDone && !LocalStorage.isBusinessSetupDone()) {
       await LocalStorage.markBusinessSetupDone();
+    }
+    // Always try to pull business data from server so local cache is in sync
+    try {
+      final response = await _apiClient.get(ApiConstants.business);
+      final raw = response.data as Map<String, dynamic>;
+      final businessData = (raw['business'] as Map<String, dynamic>?) ?? raw;
+      if (businessData.isNotEmpty) {
+        await LocalStorage.saveBusinessData(businessData);
+      }
+    } catch (_) {
+      // Offline — user will see local data or re-enter
     }
   }
 

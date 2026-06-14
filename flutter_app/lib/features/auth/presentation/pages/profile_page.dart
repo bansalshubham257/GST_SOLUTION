@@ -155,8 +155,8 @@ class ProfilePage extends ConsumerWidget {
                 _SettingsItem(
                   icon: Icons.receipt_outlined,
                   title: 'Invoice Settings',
-                  subtitle: 'Prefix, terms, signature',
-                  onTap: () => context.push(AppRoutes.businessSetup),
+                  subtitle: 'Prefix, terms, signature, templates',
+                  onTap: () => context.push(AppRoutes.invoiceSettings),
                 ),
               ],
             ),

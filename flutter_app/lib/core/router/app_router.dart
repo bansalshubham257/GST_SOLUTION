@@ -20,10 +20,12 @@ import '../../features/customer/presentation/pages/add_customer_page.dart';
 import '../../features/customer/presentation/pages/customer_detail_page.dart';
 import '../../features/gst_reports/presentation/pages/gstr1_page.dart';
 import '../../features/gst_reports/presentation/pages/gstr3b_page.dart';
+import '../../features/gst_reports/presentation/pages/gst_reports_page.dart';
 import '../../features/gst_filing/presentation/pages/gst_filing_page.dart';
 import '../../features/chat_support/presentation/pages/chat_support_page.dart';
 import '../../features/invoice/presentation/pages/item_catalog_page.dart';
 import '../../features/invoice/presentation/pages/add_item_page.dart';
+import '../../features/invoice/presentation/pages/invoice_settings_page.dart';
 import '../../features/invoice/data/models/item_catalog_entry.dart';
 import '../../features/invoice/domain/entities/invoice_entity.dart';
 import '../../features/purchase/domain/entities/purchase_entity.dart';
@@ -54,9 +56,10 @@ class AppRoutes {
   static const String customers = '/customers';
   static const String addCustomer = '/customers/add';
   static const String customerDetail = '/customers/:id';
+  static const String gst = '/gst';
   static const String reports = '/reports';
-  static const String gstr1 = '/reports/gstr1';
-  static const String gstr3b = '/reports/gstr3b';
+  static const String gstr1 = '/gst/gstr1';
+  static const String gstr3b = '/gst/gstr3b';
   static const String gstFiling = '/gst-filing';
   static const String chatSupport = '/chat-support';
   static const String serviceCatalog = '/reports';
@@ -69,6 +72,7 @@ class AppRoutes {
   static const String addExpense = '/expenses/add';
   static const String signup = '/signup';
   static const String profile = '/profile';
+  static const String invoiceSettings = '/invoice-settings';
   static const String purchases = '/purchases';
   static const String createPurchase = '/purchases/create';
   static const String editPurchase = '/purchases/:id/edit';
@@ -174,6 +178,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
       ),
+      GoRoute(
+        path: AppRoutes.invoiceSettings,
+        name: 'invoice-settings',
+        builder: (context, state) => const InvoiceSettingsPage(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             MainShell(navigationShell: navigationShell),
@@ -268,7 +277,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          // Branch 4: Reports (Services, Expenses, GST)
+          // Branch 4: Services
           StatefulShellBranch(routes: [
             GoRoute(
               path: AppRoutes.reports,
@@ -286,6 +295,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   builder: (context, state) =>
                       AddItemPage(editItem: state.extra as ItemCatalogEntry?),
                 ),
+              ],
+            ),
+          ]),
+          // Branch 5: GST
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.gst,
+              name: 'gst-tab',
+              builder: (context, state) => const GstReportsPage(),
+              routes: [
                 GoRoute(
                   path: 'gstr1',
                   name: 'gstr1',

@@ -142,6 +142,13 @@ class _BottomNavBar extends StatelessWidget {
                 isActive: currentIndex == 4,
                 onTap: () => onTap(4),
               ),
+              _NavItem(
+                icon: Icons.receipt_long_outlined,
+                activeIcon: Icons.receipt_long,
+                label: 'GST',
+                isActive: currentIndex == 5,
+                onTap: () => onTap(5),
+              ),
             ],
           ),
         ),
