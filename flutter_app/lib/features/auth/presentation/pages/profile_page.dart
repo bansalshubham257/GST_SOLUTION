@@ -165,7 +165,6 @@ class ProfilePage extends ConsumerWidget {
       ),
     );
   }
-}
 
   Widget _buildPlanCard(BuildContext context, dynamic user) {
     if (user == null) return const SizedBox.shrink();

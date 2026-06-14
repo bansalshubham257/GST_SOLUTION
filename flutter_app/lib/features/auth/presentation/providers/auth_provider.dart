@@ -11,6 +11,7 @@ import '../../../../core/storage/local_storage.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/services/sync_service.dart';
 
 // ─── Auth State ────────────────────────────────────────────────────────────────
 
@@ -55,11 +56,13 @@ final authStateProvider = AsyncNotifierProvider<AuthNotifier, AuthState>(
 class AuthNotifier extends AsyncNotifier<AuthState> {
   late final FirebaseAuth _firebaseAuth;
   late final ApiClient _apiClient;
+  late final SyncService _syncService;
   bool _firebaseAvailable = false;
 
   @override
   Future<AuthState> build() async {
     _apiClient = ref.read(apiClientProvider);
+    _syncService = ref.read(syncServiceProvider);
 
     // Try Firebase
     try {
@@ -77,6 +80,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           final response = await _apiClient.get(ApiConstants.me);
           final userData = response.data as Map<String, dynamic>;
           final userEntity = _parseUserEntity(userData);
+
+          if (userEntity.shouldSyncToDb) {
+            _syncService.syncAll();
+          }
 
           return AuthState(
             isLoggedIn: true,
@@ -109,6 +116,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         final response = await _apiClient.get(ApiConstants.me);
         final userData = response.data as Map<String, dynamic>;
         final userEntity = _parseUserEntity(userData);
+
+        if (userEntity.shouldSyncToDb) {
+          _syncService.syncAll();
+        }
 
         return AuthState(
           isLoggedIn: true,
@@ -152,6 +163,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
         user: userEntity,
       ));
+
+      if (userEntity.shouldSyncToDb) {
+        _syncService.syncAll();
+      }
     } on DioException catch (e) {
       final msg = e.response?.data?['error']?.toString() ?? 'Login failed. Check your credentials.';
       state = AsyncError(msg, StackTrace.current);
@@ -191,6 +206,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         isBusinessSetupDone: false,
         user: userEntity,
       ));
+
+      if (userEntity.shouldSyncToDb) {
+        _syncService.syncAll();
+      }
     } on DioException catch (e) {
       final msg = e.response?.data?['error']?.toString() ?? 'Signup failed';
       state = AsyncError(msg, StackTrace.current);
@@ -330,6 +349,18 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     } on FirebaseAuthException catch (e) {
       state = AsyncError(_getFirebaseErrorMessage(e), StackTrace.current);
     }
+  }
+
+  // ─── Update business setup flag locally ──────────────────────────────────
+
+  void markBusinessSetupDone() {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updatedUser = current.user?.copyWith(isBusinessSetupDone: true);
+    state = AsyncData(current.copyWith(
+      isBusinessSetupDone: true,
+      user: updatedUser,
+    ));
   }
 
   // ─── Sign Out ────────────────────────────────────────────────────────────────

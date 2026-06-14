@@ -7,6 +7,7 @@ import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
+import '../services/sync_service.dart';
 import 'api_interceptors.dart';
 
 final dioProvider = Provider<Dio>((ref) {
@@ -39,6 +40,10 @@ final dioProvider = Provider<Dio>((ref) {
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(ref.watch(dioProvider));
+});
+
+final syncServiceProvider = Provider<SyncService>((ref) {
+  return SyncService(ref.watch(apiClientProvider));
 });
 
 class ApiClient {

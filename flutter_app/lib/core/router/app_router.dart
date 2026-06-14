@@ -86,7 +86,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state.matchedLocation != AppRoutes.businessSetup) {
         return AppRoutes.businessSetup;
       }
-      if (isLoggedIn && isLoginRoute) return AppRoutes.dashboard;
+      if (isLoggedIn && state.matchedLocation == AppRoutes.login) return AppRoutes.dashboard;
       return null;
     },
     routes: [

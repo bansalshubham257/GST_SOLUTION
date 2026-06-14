@@ -13,6 +13,7 @@ const chatRoutes = require('./chat.routes');
 const adminRoutes = require('./admin.routes');
 const uploadRoutes = require('./upload.routes');
 const scanBillRoutes = require('./scan_bill.routes');
+const syncRoutes = require('./sync.routes');
 
 router.use('/auth', authRoutes);
 router.use('/business', businessRoutes);
@@ -25,6 +26,7 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/chat', chatRoutes);
 router.use('/admin', adminRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/sync', syncRoutes);
 
 module.exports = router;
 

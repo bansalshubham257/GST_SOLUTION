@@ -104,10 +104,10 @@ class BusinessSetupNotifier extends Notifier<BusinessSetupState> {
       // API failed — local data is already saved, proceed
     }
 
-    // Refresh auth state so router picks up isBusinessSetupDone = true
-    await ref.read(authStateProvider.notifier).build();
-
     state = state.copyWith(isLoading: false, isSuccess: true);
+
+    // Update auth state locally so router picks up isBusinessSetupDone without a full re-auth
+    ref.read(authStateProvider.notifier).markBusinessSetupDone();
   }
 
   void reset() => state = const BusinessSetupState();
