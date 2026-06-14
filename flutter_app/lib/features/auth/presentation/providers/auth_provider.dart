@@ -160,12 +160,23 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
-  // ─── Demo / Try Mode ───────────────────────────────────────────────────────
+  // ─── Signup ──────────────────────────────────────────────────────────────
 
-  Future<void> tryDemo() async {
+  Future<void> signup({
+    required String username,
+    required String password,
+    String? name,
+  }) async {
     state = const AsyncLoading();
     try {
-      final response = await _apiClient.post(ApiConstants.dbDemoLogin);
+      final response = await _apiClient.post(
+        ApiConstants.signup,
+        data: {
+          'username': username,
+          'password': password,
+          if (name != null && name.isNotEmpty) 'name': name,
+        },
+      );
 
       final data = response.data as Map<String, dynamic>;
       final token = data['token'] as String;
@@ -174,34 +185,39 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
       await SecureStorage.write(AppConstants.tokenKey, token);
       await SecureStorage.write(AppConstants.userIdKey, userEntity.id);
-      if (userEntity.businessId != null) {
-        await SecureStorage.write(AppConstants.businessIdKey, userEntity.businessId!);
-      }
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
-        isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+        isBusinessSetupDone: false,
         user: userEntity,
       ));
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error']?.toString() ?? 'Signup failed';
+      state = AsyncError(msg, StackTrace.current);
     } catch (e) {
-      // Fallback: offline demo if backend unreachable
-      final demoUser = UserEntity(
-        id: 'demo-user-001',
-        name: 'Demo User',
-        plan: 'free',
-        maxStaff: 2,
-        maxServices: 2,
-        maxSales: 2,
-        isBusinessSetupDone: true,
-        businessId: 'demo-business-001',
-        createdAt: DateTime(2024, 1, 1),
-      );
-      state = AsyncData(AuthState(
-        isLoggedIn: true,
-        isBusinessSetupDone: true,
-        user: demoUser,
-      ));
+      state = AsyncError('Signup failed: ${e.toString()}', StackTrace.current);
     }
+  }
+
+  // ─── Skip Login (offline free mode, no backend call) ─────────────────────
+
+  Future<void> skipLogin() async {
+    final localUser = UserEntity(
+      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Guest',
+      plan: 'free',
+      maxStaff: 2,
+      maxServices: 2,
+      maxSales: 2,
+      isBusinessSetupDone: true,
+      businessId: 'local-business',
+      createdAt: DateTime.now(),
+    );
+    state = AsyncData(AuthState(
+      isLoggedIn: true,
+      isBusinessSetupDone: true,
+      user: localUser,
+    ));
   }
 
   // ─── Phone OTP Login ────────────────────────────────────────────────────────
@@ -314,12 +330,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     } on FirebaseAuthException catch (e) {
       state = AsyncError(_getFirebaseErrorMessage(e), StackTrace.current);
     }
-  }
-
-  // ─── Demo Login (legacy, kept for compat) ──────────────────────────────────
-
-  Future<void> demoLogin() async {
-    await tryDemo();
   }
 
   // ─── Sign Out ────────────────────────────────────────────────────────────────

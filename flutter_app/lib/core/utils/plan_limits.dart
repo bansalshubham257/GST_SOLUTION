@@ -11,9 +11,9 @@ class PlanLimits {
       builder: (ctx) => AlertDialog(
         title: const Text('Plan Limit Reached'),
         content: Text(
-          'You can add up to $max $label on the free plan.\n'
+          'You can add up to $max $label on your current plan.\n'
           'You already have $current $label.\n\n'
-          'Contact your admin to upgrade your plan.',
+          'Upgrade to a paid plan for unlimited access.',
         ),
         actions: [
           TextButton(

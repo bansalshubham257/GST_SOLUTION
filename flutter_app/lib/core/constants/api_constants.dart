@@ -18,6 +18,7 @@ class ApiConstants {
   static const String logout = '/auth/logout';
   static const String refreshToken = '/auth/refresh';
   static const String me = '/auth/me';
+  static const String signup = '/auth/signup';
   static const String dbLogin = '/auth/db-login';
   static const String dbDemoLogin = '/auth/db-demo-login';
 

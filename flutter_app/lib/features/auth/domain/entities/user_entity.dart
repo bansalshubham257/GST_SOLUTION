@@ -35,6 +35,13 @@ class UserEntity extends Equatable {
 
   bool get isLoggedIn => id.isNotEmpty;
 
+  /// Whether this user's data should sync to the backend DB.
+  /// Only 'db_paid' plan syncs; 'free' and 'local_paid' stay local only.
+  bool get shouldSyncToDb => plan == 'db_paid';
+
+  /// Whether this user has unlimited records (no plan limits).
+  bool get isUnlimited => plan == 'local_paid' || plan == 'db_paid';
+
   UserEntity copyWith({
     String? id,
     String? name,

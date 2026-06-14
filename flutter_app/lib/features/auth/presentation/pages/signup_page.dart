@@ -5,25 +5,27 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../providers/auth_provider.dart';
-import 'signup_page.dart';
 
-class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+class SignupPage extends ConsumerStatefulWidget {
+  const SignupPage({super.key});
 
   @override
-  ConsumerState<LoginPage> createState() => _LoginPageState();
+  ConsumerState<SignupPage> createState() => _SignupPageState();
 }
 
-class _LoginPageState extends ConsumerState<LoginPage> {
+class _SignupPageState extends ConsumerState<SignupPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _agreeToTerms = false;
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -34,6 +36,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ref.listen(authStateProvider, (_, next) {
       next.whenOrNull(
         error: (error, _) => _showError(error.toString()),
+        data: (data) {
+          if (data.isLoggedIn) context.go('/dashboard');
+        },
       );
     });
 
@@ -46,16 +51,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 48),
+                const SizedBox(height: 32),
                 _buildHeader(),
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
                 _buildInputFields(),
-                const SizedBox(height: 24),
-                _buildPrimaryButton(authState.isLoading),
                 const SizedBox(height: 12),
-                _buildSkipLoginButton(authState.isLoading),
+                _buildTermsCheckbox(),
                 const SizedBox(height: 24),
-                _buildSignupLink(),
+                _buildSignupButton(authState.isLoading),
+                const SizedBox(height: 24),
+                _buildLoginLink(),
               ],
             ),
           ),
@@ -69,26 +74,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.content_cut, color: Colors.white, size: 28),
+          child: const Icon(Icons.person_add, color: Colors.white, size: 24),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         Text(
-          'Welcome to\nRegister',
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+          'Create Account',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                height: 1.2,
               ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Simple GST invoicing for Indian businesses',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          'Start with a free plan — no credit card needed.\nUpgrade anytime for unlimited access.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.textSecondaryLight,
               ),
         ),
@@ -100,19 +104,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Column(
       children: [
         AppTextField(
+          label: 'Name (optional)',
+          hint: 'Your name or business name',
+          controller: _nameController,
+          prefix: const Icon(Icons.badge_outlined, size: 20),
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
           label: 'Username',
-          hint: 'Enter your username',
+          hint: 'Choose a username',
           controller: _usernameController,
           prefix: const Icon(Icons.person_outline, size: 20),
           validator: (v) {
-            if (v == null || v.isEmpty) return 'Enter username';
+            if (v == null || v.isEmpty) return 'Enter a username';
+            if (v.length < 3) return 'Username must be at least 3 characters';
             return null;
           },
         ),
         const SizedBox(height: 16),
         AppTextField(
           label: 'Password',
-          hint: '••••••••',
+          hint: 'At least 4 characters',
           controller: _passwordController,
           obscureText: !_isPasswordVisible,
           prefix: const Icon(Icons.lock_outline, size: 20),
@@ -124,7 +136,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
           ),
           validator: (v) {
-            if (v == null || v.isEmpty) return 'Enter password';
+            if (v == null || v.isEmpty) return 'Enter a password';
+            if (v.length < 4) return 'Password must be at least 4 characters';
             return null;
           },
         ),
@@ -132,64 +145,55 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Widget _buildPrimaryButton(bool isLoading) {
-    return AppButton(
-      label: 'Sign In',
-      onPressed: _handleLogin,
-      isLoading: isLoading,
-      icon: Icons.login,
-    );
-  }
-
-  Widget _buildSkipLoginButton(bool isLoading) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
-        color: AppColors.primary.withOpacity(0.05),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: isLoading ? null : _handleSkipLogin,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.explore_outlined, color: AppColors.primary, size: 20),
-                SizedBox(width: 10),
-                Text(
-                  'Skip Login  (Free, Local Only)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildTermsCheckbox() {
+    return Row(
+      children: [
+        SizedBox(
+          height: 24,
+          width: 24,
+          child: Checkbox(
+            value: _agreeToTerms,
+            onChanged: (v) => setState(() => _agreeToTerms = v ?? false),
+            activeColor: AppColors.primary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'I agree to the Terms & Conditions and Privacy Policy',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondaryLight,
+                ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildSignupLink() {
+  Widget _buildSignupButton(bool isLoading) {
+    return AppButton(
+      label: 'Create Free Account',
+      onPressed: _handleSignup,
+      isLoading: isLoading,
+      icon: Icons.person_add,
+    );
+  }
+
+  Widget _buildLoginLink() {
     return Center(
       child: TextButton(
-        onPressed: () => context.push('/signup'),
+        onPressed: () => context.go('/login'),
         child: RichText(
           text: TextSpan(
             style: Theme.of(context).textTheme.bodyMedium,
             children: [
               const TextSpan(
-                text: "Don't have an account? ",
+                text: 'Already have an account? ',
                 style: TextStyle(color: AppColors.textSecondaryLight),
               ),
               TextSpan(
-                text: 'Sign Up',
+                text: 'Sign In',
                 style: TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -202,16 +206,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  void _handleLogin() {
+  void _handleSignup() {
     if (!_formKey.currentState!.validate()) return;
-    ref.read(authStateProvider.notifier).loginWithUsername(
+    if (!_agreeToTerms) {
+      _showError('Please agree to the Terms & Conditions');
+      return;
+    }
+    ref.read(authStateProvider.notifier).signup(
       username: _usernameController.text.trim(),
       password: _passwordController.text,
+      name: _nameController.text.trim(),
     );
-  }
-
-  void _handleSkipLogin() {
-    ref.read(authStateProvider.notifier).skipLogin();
   }
 
   void _showError(String error) {

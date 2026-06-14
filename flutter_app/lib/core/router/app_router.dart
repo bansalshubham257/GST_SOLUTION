@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/otp_verification_page.dart';
 import '../../features/auth/presentation/pages/profile_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
@@ -61,6 +62,7 @@ class AppRoutes {
   static const String editStaff = '/staff/edit';
   static const String expenses = '/expenses';
   static const String addExpense = '/expenses/add';
+  static const String signup = '/signup';
   static const String profile = '/profile';
 }
 
@@ -74,10 +76,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLoggedIn = authState.valueOrNull?.isLoggedIn ?? false;
       final isBusinessSetupDone =
           authState.valueOrNull?.isBusinessSetupDone ?? false;
-      final isLoginRoute = state.matchedLocation == AppRoutes.login ||
+      final isPublicRoute = state.matchedLocation == AppRoutes.login ||
+          state.matchedLocation == AppRoutes.signup ||
           state.matchedLocation == AppRoutes.otpVerification;
 
-      if (!isLoggedIn && !isLoginRoute) return AppRoutes.login;
+      if (!isLoggedIn && !isPublicRoute) return AppRoutes.login;
       if (isLoggedIn &&
           !isBusinessSetupDone &&
           state.matchedLocation != AppRoutes.businessSetup) {
@@ -95,6 +98,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.login,
         name: 'login',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.signup,
+        name: 'signup',
+        builder: (context, state) => const SignupPage(),
       ),
       GoRoute(
         path: AppRoutes.otpVerification,

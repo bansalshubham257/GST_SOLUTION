@@ -250,5 +250,65 @@ const dbDemoLogin = async (req, res, next) => {
   return dbLogin(req, res, next);
 };
 
-module.exports = { login, getMe, logout, deleteAccount, devLogin, dbLogin, dbDemoLogin };
+/**
+ * POST /auth/signup
+ * Create a new account with free plan (local-only, 2-record limit).
+ * Admin can upgrade plan_type in DB to 'local_paid' or 'db_paid'.
+ */
+const signup = async (req, res, next) => {
+  try {
+    const { username, password, name } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    if (password.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    }
+
+    // Check if username already exists
+    const existing = await query(
+      'SELECT id FROM gst_app.users WHERE username = $1',
+      [username]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await query(
+      `INSERT INTO gst_app.users (username, password_hash, name, plan_type, max_staff, max_services, max_sales)
+       VALUES ($1, $2, $3, 'free', 2, 2, 2)
+       RETURNING id, username, name, plan_type, max_staff, max_services, max_sales, created_at`,
+      [username, passwordHash, name || username]
+    );
+
+    const dbUser = result.rows[0];
+
+    const token = jwt.sign(
+      { userId: dbUser.id, username: dbUser.username, plan: dbUser.plan_type },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: dbUser.id,
+        firebaseUid: `custom_${dbUser.id}`,
+        name: dbUser.name || '',
+        plan: dbUser.plan_type,
+        maxStaff: dbUser.max_staff,
+        maxServices: dbUser.max_services,
+        maxSales: dbUser.max_sales,
+        isBusinessSetupDone: false,
+        businessId: null,
+        createdAt: dbUser.created_at,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { login, getMe, logout, deleteAccount, devLogin, dbLogin, dbDemoLogin, signup };
 

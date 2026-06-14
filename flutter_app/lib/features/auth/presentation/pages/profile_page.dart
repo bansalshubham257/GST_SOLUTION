@@ -58,6 +58,10 @@ class ProfilePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
+          Text('Plan', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          _buildPlanCard(context, user),
+          const SizedBox(height: 16),
           Text('Business', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
           const SizedBox(height: 8),
           AppCard(
@@ -158,6 +162,57 @@ class ProfilePage extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+}
+
+  Widget _buildPlanCard(BuildContext context, dynamic user) {
+    if (user == null) return const SizedBox.shrink();
+    final plan = user.plan ?? 'free';
+    final isPaid = plan == 'local_paid' || plan == 'db_paid';
+
+    String planLabel;
+    IconData planIcon;
+    Color planColor;
+    String planDesc;
+
+    switch (plan) {
+      case 'db_paid':
+        planLabel = 'DB Paid';
+        planIcon = Icons.cloud_done;
+        planColor = Colors.green;
+        planDesc = 'Unlimited • Auto-sync to cloud';
+        break;
+      case 'local_paid':
+        planLabel = 'Local Paid';
+        planIcon = Icons.storage;
+        planColor = Colors.blue;
+        planDesc = 'Unlimited • Local storage only';
+        break;
+      default:
+        planLabel = 'Free';
+        planIcon = Icons.free_breakfast;
+        planColor = AppColors.textSecondaryLight;
+        planDesc = 'Limited to 2 staff, 2 services, 2 sales';
+    }
+
+    return AppCard(
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+          child: Icon(planIcon, color: planColor, size: 22),
+        ),
+        title: Text(planLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(planDesc, style: Theme.of(context).textTheme.bodySmall),
+        trailing: isPaid
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                child: Text('Active', style: TextStyle(fontSize: 11, color: planColor, fontWeight: FontWeight.w600)),
+              )
+            : null,
       ),
     );
   }
