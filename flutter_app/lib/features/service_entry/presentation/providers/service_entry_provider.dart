@@ -182,7 +182,6 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
   }
 
   Future<void> saveServiceEntry() async {
-    if (state.selectedStaffId == null) return;
     if (state.services.isEmpty) return;
 
     state = state.copyWith(isSaving: true, error: null);
@@ -198,8 +197,8 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
         return {
           'description': s.serviceName,
           'hsnCode': s.hsnCode,
-          'staffId': state.selectedStaffId,
-          'staffName': state.selectedStaffName,
+          if (state.selectedStaffId != null) 'staffId': state.selectedStaffId,
+          if (state.selectedStaffName != null) 'staffName': state.selectedStaffName,
           'quantity': s.quantity,
           'unit': 'Nos',
           'unitPrice': s.unitPrice,

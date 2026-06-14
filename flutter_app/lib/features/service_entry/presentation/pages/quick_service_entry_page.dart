@@ -48,7 +48,7 @@ class _QuickServiceEntryPageState
         ref.invalidate(staffListProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Service completed!'),
+            content: Text('Sale completed!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -68,14 +68,14 @@ class _QuickServiceEntryPageState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Service'),
+        title: const Text('New Sale'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           TextButton(
-            onPressed: state.services.isEmpty || state.selectedStaffId == null
+            onPressed: state.services.isEmpty
                 ? null
                 : () => _confirmAndSave(state),
             child: const Text('Complete',
@@ -108,9 +108,8 @@ class _QuickServiceEntryPageState
   }
 
   Widget _buildStepIndicator(ServiceEntryState state) {
-    final steps = ['Staff', 'Service', 'Payment', 'Customer'];
-    int currentStep = 0;
-    if (state.selectedStaffId != null) currentStep = 1;
+    final steps = ['Staff', 'Items', 'Payment', 'Customer'];
+    int currentStep = 1;
     if (state.services.isNotEmpty) currentStep = 2;
     if (state.paymentMode.isNotEmpty) currentStep = 3;
     if (state.customerName != null) currentStep = 4;
@@ -182,7 +181,7 @@ class _QuickServiceEntryPageState
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Who did the service?',
+            const Text('Assign Staff (optional)',
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -247,14 +246,14 @@ class _QuickServiceEntryPageState
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Services provided',
+            const Text('Items',
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textSecondaryLight)),
             TextButton.icon(
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Service'),
+              label: const Text('Add Item'),
               onPressed: () => _showServicePicker(services),
             ),
           ],
@@ -274,10 +273,10 @@ class _QuickServiceEntryPageState
               ),
               child: const Column(
                 children: [
-                  Icon(Icons.content_cut, size: 40,
+                  Icon(Icons.add_shopping_cart, size: 40,
                       color: AppColors.textTertiaryLight),
                   SizedBox(height: 8),
-                  Text('Tap to add a service',
+                  Text('Tap to add an item',
                       style: TextStyle(color: AppColors.textSecondaryLight)),
                 ],
               ),
@@ -540,8 +539,7 @@ class _QuickServiceEntryPageState
   }
 
   Widget _buildBottomBar(ServiceEntryState state) {
-    final canComplete =
-        state.selectedStaffId != null && state.services.isNotEmpty;
+    final canComplete = state.services.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -553,7 +551,7 @@ class _QuickServiceEntryPageState
         child: AppButton(
           label: state.grandTotal > 0
               ? 'Complete — ₹${state.grandTotal.toStringAsFixed(0)}'
-              : 'Complete Service',
+              : 'Complete Sale',
           icon: Icons.check_circle_outline,
           onPressed: canComplete && !state.isSaving
               ? () => _confirmAndSave(state)
@@ -578,14 +576,14 @@ class _QuickServiceEntryPageState
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Complete Service?'),
+        title: const Text('Complete Sale?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _confirmRow('Staff', state.selectedStaffName ?? '-'),
             _confirmRow(
-                'Services',
+                'Items',
                 state.services
                     .map((s) =>
                         '${s.serviceName} × ${s.quantity.toStringAsFixed(0)}')
@@ -716,7 +714,7 @@ class _ServicePickerSheet extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Select Service',
+                const Text('Select Item',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 TextButton.icon(
