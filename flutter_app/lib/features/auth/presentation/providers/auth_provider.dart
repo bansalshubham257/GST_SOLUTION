@@ -81,6 +81,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           final userData = response.data as Map<String, dynamic>;
           final userEntity = _parseUserEntity(userData);
 
+          await _syncBusinessFlag(userEntity);
           if (userEntity.shouldSyncToDb) {
             _syncService.syncAll();
           }
@@ -117,6 +118,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         final userData = response.data as Map<String, dynamic>;
         final userEntity = _parseUserEntity(userData);
 
+        await _syncBusinessFlag(userEntity);
         if (userEntity.shouldSyncToDb) {
           _syncService.syncAll();
         }
@@ -159,6 +161,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       }
 
       await _ensureDataIsolation(userEntity.id);
+      await _syncBusinessFlag(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
@@ -204,10 +207,11 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       await SecureStorage.write(AppConstants.userIdKey, userEntity.id);
 
       await _ensureDataIsolation(userEntity.id);
+      await _syncBusinessFlag(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
-        isBusinessSetupDone: false,
+        isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
         user: userEntity,
       ));
 
@@ -428,6 +432,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       }
 
       await _ensureDataIsolation(userEntity.id);
+      await _syncBusinessFlag(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
@@ -471,6 +476,13 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           ? DateTime.tryParse(data['createdAt']) ?? DateTime.now()
           : DateTime.now(),
     );
+  }
+
+  /// If backend says business is set up but local flag is missing (e.g. after clear data), sync it.
+  Future<void> _syncBusinessFlag(UserEntity user) async {
+    if (user.isBusinessSetupDone && !LocalStorage.isBusinessSetupDone()) {
+      await LocalStorage.markBusinessSetupDone();
+    }
   }
 
   String _getFirebaseErrorMessage(FirebaseAuthException e) {
