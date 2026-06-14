@@ -18,6 +18,7 @@ const logger = require('./src/utils/logger');
 const { initSocketIO } = require('./src/services/socketService');
 
 const app = express();
+app.set('trust proxy', true);
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {

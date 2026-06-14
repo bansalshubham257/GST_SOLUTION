@@ -32,7 +32,7 @@ const syncAll = async (req, res, next) => {
             `INSERT INTO gst_app.businesses (id, user_id, name, business_type, state, is_active)
              VALUES (gen_random_uuid(), $1, $2, $3, $4, true)
              RETURNING id`,
-            [userId, business.name || 'My Business', business.business_type || 'retail', business.state || '']
+            [userId, business.name || 'My Business', business.business_type || business.businessType || 'retail', business.state || '']
           );
           businessId = newBiz.rows[0].id;
         } else {
@@ -42,12 +42,24 @@ const syncAll = async (req, res, next) => {
 
       // Update business details if provided
       if (business) {
+        const BUSINESS_KEY_MAP = {
+          'businessType': 'business_type',
+          'logoUrl': 'logo_url',
+        };
+        const VALID_BUSINESS_COLUMNS = new Set([
+          'name', 'gstin', 'pan', 'phone', 'email', 'address', 'city', 'state',
+          'state_code', 'pincode', 'business_type', 'registration_type', 'logo_url',
+          'invoice_prefix', 'bank_name', 'bank_account', 'bank_ifsc', 'bank_branch',
+          'terms_and_conditions', 'signature_url', 'default_notes'
+        ]);
         const fields = [];
         const values = [];
         let idx = 1;
         for (const [key, val] of Object.entries(business)) {
-          if (['id', 'user_id', 'created_at', 'updated_at', 'is_active'].includes(key)) continue;
-          fields.push(`${key} = $${idx++}`);
+          if (['id', 'user_id', 'created_at', 'updated_at', 'is_active', 'setupDone'].includes(key)) continue;
+          const dbKey = BUSINESS_KEY_MAP[key] || key;
+          if (!VALID_BUSINESS_COLUMNS.has(dbKey)) continue;
+          fields.push(`${dbKey} = $${idx++}`);
           values.push(val);
         }
         if (fields.length > 0) {

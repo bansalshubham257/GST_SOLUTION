@@ -3,19 +3,14 @@
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
+const searchPathUrl = process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '&' : '?') + 'options=-c%20search_path%3Dgst_app%2Cpublic';
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: searchPathUrl,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-});
-
-// Set search_path so unqualified table references resolve to gst_app schema first
-pool.on('connect', (client) => {
-  client.query("SET search_path TO gst_app, public").catch((err) => {
-    logger.warn('Failed to set search_path:', err.message);
-  });
 });
 
 pool.on('error', (err) => {
@@ -47,6 +42,7 @@ const initDB = async () => {
 const transaction = async (callback) => {
   const client = await pool.connect();
   try {
+    await client.query("SET search_path TO gst_app, public");
     await client.query('BEGIN');
     const result = await callback(client);
     await client.query('COMMIT');
