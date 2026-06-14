@@ -9,6 +9,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/storage/local_storage.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../../../core/services/sync_service.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 class BusinessSetupState {
@@ -108,6 +109,12 @@ class BusinessSetupNotifier extends Notifier<BusinessSetupState> {
 
     // Update auth state locally so router picks up isBusinessSetupDone without a full re-auth
     ref.read(authStateProvider.notifier).markBusinessSetupDone();
+
+    // Push data to backend if db_paid plan
+    final authState = ref.read(authStateProvider).valueOrNull;
+    if (authState?.user?.shouldSyncToDb == true) {
+      ref.read(syncServiceProvider).syncAll();
+    }
   }
 
   void reset() => state = const BusinessSetupState();

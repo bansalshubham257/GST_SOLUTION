@@ -19,7 +19,8 @@ pool.on('error', (err) => {
 
 const query = async (text, params) => {
   const start = Date.now();
-  const res = await pool.query(text, params);
+  // Ensure search_path is set (pool.query() borrows any connection — may be old)
+  const res = await pool.query(`SET search_path TO gst_app, public; ${text}`, params);
   const duration = Date.now() - start;
   if (duration > 1000) {
     logger.warn('Slow query detected', { text, duration });
