@@ -81,6 +81,7 @@ const syncAll = async (req, res, next) => {
       if (Array.isArray(customers)) {
         for (const c of customers) {
           try {
+            await client.query('SAVEPOINT sp');
             const cid = validUuid(c.id) ? c.id : null;
             const existing = cid ? await client.query('SELECT id FROM gst_app.customers WHERE id = $1', [cid]) : { rows: [] };
             if (existing.rows.length > 0) {
@@ -102,8 +103,10 @@ const syncAll = async (req, res, next) => {
                  c.invoice_count||0, c.total_business||0]
               );
             }
+            await client.query('RELEASE SAVEPOINT sp');
             results.customers++;
           } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sp');
             results.errors.push({ type: 'customer', id: c.id, error: err.message });
           }
         }
@@ -113,6 +116,7 @@ const syncAll = async (req, res, next) => {
       if (Array.isArray(products)) {
         for (const p of products) {
           try {
+            await client.query('SAVEPOINT sp');
             const pid = validUuid(p.id) ? p.id : null;
             const existing = pid ? await client.query('SELECT id FROM gst_app.products WHERE id = $1', [pid]) : { rows: [] };
             if (existing.rows.length > 0) {
@@ -130,8 +134,10 @@ const syncAll = async (req, res, next) => {
                  p.is_service||false, p.unit_price||0, p.unit||'nos', p.gst_rate||0]
               );
             }
+            await client.query('RELEASE SAVEPOINT sp');
             results.products++;
           } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sp');
             results.errors.push({ type: 'product', id: p.id, error: err.message });
           }
         }
@@ -141,6 +147,7 @@ const syncAll = async (req, res, next) => {
       if (Array.isArray(invoices)) {
         for (const inv of invoices) {
           try {
+            await client.query('SAVEPOINT sp');
             const invId = validUuid(inv.id) ? inv.id : null;
             const customerId = validUuid(inv.customer_id) ? inv.customer_id : null;
             const lineItems = inv.line_items || inv.lineItems || [];
@@ -198,8 +205,10 @@ const syncAll = async (req, res, next) => {
                  li.total_amount||0, li.sort_order||0]
               );
             }
+            await client.query('RELEASE SAVEPOINT sp');
             results.invoices++;
           } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sp');
             results.errors.push({ type: 'invoice', id: inv.id, error: err.message });
           }
         }
@@ -209,6 +218,7 @@ const syncAll = async (req, res, next) => {
       if (Array.isArray(staff)) {
         for (const s of staff) {
           try {
+            await client.query('SAVEPOINT sp');
             const sid = validUuid(s.id) ? s.id : null;
             const existing = sid ? await client.query('SELECT id FROM gst_app.staff WHERE id = $1', [sid]) : { rows: [] };
             if (existing.rows.length > 0) {
@@ -227,8 +237,10 @@ const syncAll = async (req, res, next) => {
                  s.commission_percentage||0, s.total_revenue||0, s.total_commission||0]
               );
             }
+            await client.query('RELEASE SAVEPOINT sp');
             results.staff++;
           } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sp');
             results.errors.push({ type: 'staff', id: s.id, error: err.message });
           }
         }
