@@ -84,6 +84,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           if (userEntity.shouldSyncToDb) {
             _syncService.syncAll();
           }
+          _syncService.watchChanges(active: userEntity.shouldSyncToDb);
 
           return AuthState(
             isLoggedIn: true,
@@ -120,6 +121,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         if (userEntity.shouldSyncToDb) {
           _syncService.syncAll();
         }
+        _syncService.watchChanges(active: userEntity.shouldSyncToDb);
 
         return AuthState(
           isLoggedIn: true,
@@ -169,6 +171,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       if (userEntity.shouldSyncToDb) {
         _syncService.syncAll();
       }
+      _syncService.watchChanges(active: userEntity.shouldSyncToDb);
     } on DioException catch (e) {
       final msg = e.response?.data?['error']?.toString() ?? 'Login failed. Check your credentials.';
       state = AsyncError(msg, StackTrace.current);
@@ -214,6 +217,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       if (userEntity.shouldSyncToDb) {
         _syncService.syncAll();
       }
+      _syncService.watchChanges(active: userEntity.shouldSyncToDb);
     } on DioException catch (e) {
       final msg = e.response?.data?['error']?.toString() ?? 'Signup failed';
       state = AsyncError(msg, StackTrace.current);

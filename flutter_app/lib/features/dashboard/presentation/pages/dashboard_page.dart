@@ -172,7 +172,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             Expanded(
               child: _MetricCard(
                 label: "Today's Sales",
-                value: '₹${_formatAmount(data.totalSales)}',
+                value: '₹${_formatAmount(data.todaySales)}',
                 icon: Icons.today,
                 color: AppColors.primary,
                 bgColor: AppColors.primarySurface,

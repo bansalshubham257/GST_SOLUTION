@@ -10,6 +10,7 @@ import '../../../../core/storage/local_storage.dart';
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 
 class DashboardStats {
+  final double todaySales;
   final double totalSales;
   final double totalGstCollected;
   final double totalCgst;
@@ -17,6 +18,7 @@ class DashboardStats {
   final double totalIgst;
   final int invoiceCount;
   final int customerCount;
+  final int productCount;
   final double salesGrowth;
   final double totalExpenses;
   final double cashSales;
@@ -26,6 +28,7 @@ class DashboardStats {
   final List<MonthlySales> monthlySales;
 
   const DashboardStats({
+    this.todaySales = 0,
     required this.totalSales,
     required this.totalGstCollected,
     required this.totalCgst,
@@ -33,6 +36,7 @@ class DashboardStats {
     required this.totalIgst,
     required this.invoiceCount,
     required this.customerCount,
+    this.productCount = 0,
     required this.salesGrowth,
     this.totalExpenses = 0,
     this.cashSales = 0,
@@ -42,28 +46,6 @@ class DashboardStats {
     required this.monthlySales,
   });
 
-  factory DashboardStats.fromJson(Map<String, dynamic> json) {
-    return DashboardStats(
-      totalSales: (json['totalSales'] ?? 0).toDouble(),
-      totalGstCollected: (json['totalGstCollected'] ?? 0).toDouble(),
-      totalCgst: (json['totalCgst'] ?? 0).toDouble(),
-      totalSgst: (json['totalSgst'] ?? 0).toDouble(),
-      totalIgst: (json['totalIgst'] ?? 0).toDouble(),
-      invoiceCount: json['invoiceCount'] ?? 0,
-      customerCount: json['customerCount'] ?? 0,
-      salesGrowth: (json['salesGrowth'] ?? 0).toDouble(),
-      totalExpenses: (json['totalExpenses'] ?? 0).toDouble(),
-      cashSales: (json['cashSales'] ?? 0).toDouble(),
-      upiSales: (json['upiSales'] ?? 0).toDouble(),
-      cardSales: (json['cardSales'] ?? 0).toDouble(),
-      totalCommission: (json['totalCommission'] ?? 0).toDouble(),
-      monthlySales: (json['monthlySales'] as List? ?? [])
-          .map((e) => MonthlySales.fromJson(e))
-          .toList(),
-    );
-  }
-
-  // Sample data for empty state
   static DashboardStats empty() => const DashboardStats(
     totalSales: 0,
     totalGstCollected: 0,
@@ -73,11 +55,6 @@ class DashboardStats {
     invoiceCount: 0,
     customerCount: 0,
     salesGrowth: 0,
-    totalExpenses: 0,
-    cashSales: 0,
-    upiSales: 0,
-    cardSales: 0,
-    totalCommission: 0,
     monthlySales: [],
   );
 }
@@ -132,21 +109,15 @@ class RecentInvoiceSummary {
 // ─── Providers ────────────────────────────────────────────────────────────────
 
 final dashboardStatsProvider = FutureProvider<DashboardStats>((ref) async {
-  try {
-    final apiClient = ref.read(apiClientProvider);
-    final response = await apiClient.get(ApiConstants.dashboardStats);
-    return DashboardStats.fromJson(response.data as Map<String, dynamic>);
-  } catch (_) {
-    // Backend not available — compute from local invoice cache
-    return _computeStatsFromCache();
-  }
+  return _computeStatsFromCache();
 });
 
-/// Compute dashboard stats from locally cached invoices (demo/offline mode)
+/// Compute dashboard stats from locally cached Hive data
 DashboardStats _computeStatsFromCache() {
   final invoices = LocalStorage.getAllCachedInvoices();
   if (invoices.isEmpty) return DashboardStats.empty();
 
+  double todaySales = 0;
   double totalSales = 0;
   double totalGst = 0;
   double totalCgst = 0;
@@ -157,6 +128,8 @@ DashboardStats _computeStatsFromCache() {
   double cardSales = 0;
   double totalCommission = 0;
   final Map<String, double> monthlyMap = {};
+  final now = DateTime.now();
+  final todayStart = DateTime(now.year, now.month, now.day);
 
   for (final raw in invoices) {
     final inv = Map<String, dynamic>.from(raw);
@@ -166,6 +139,7 @@ DashboardStats _computeStatsFromCache() {
     final sgst = (inv['totalSgst'] ?? 0).toDouble();
     final igst = (inv['totalIgst'] ?? 0).toDouble();
     final paymentMode = inv['paymentMode'] ?? 'cash';
+    final dateStr = inv['invoiceDate'] ?? inv['createdAt'] ?? '';
 
     totalSales += grandTotal;
     totalGst += tax;
@@ -181,30 +155,25 @@ DashboardStats _computeStatsFromCache() {
       cardSales += grandTotal;
     }
 
-    // Calculate commission from line items
-    final lineItems = (inv['lineItems'] as List? ?? []);
-    for (final itemRaw in lineItems) {
-      final item = Map<String, dynamic>.from(itemRaw);
-      final staffId = item['staffId'];
-      if (staffId != null) {
-        // For local-first, we might want to lookup staff commission rate
-        // but for now let's assume a default or just use the grandTotal/taxableAmount
-        // In a real app, we'd fetch the staff entity. 
-        // Let's assume 10% default if not found.
-        totalCommission += (item['taxableAmount'] ?? 0) * 0.1; 
-      }
-    }
-
-    // Monthly grouping
-    final dateStr = inv['invoiceDate'] ?? inv['createdAt'] ?? '';
     final date = DateTime.tryParse(dateStr);
     if (date != null) {
+      if (date.isAfter(todayStart.subtract(const Duration(days: 1)))) {
+        todaySales += grandTotal;
+      }
       final key = DateFormat('MMM').format(date);
       monthlyMap[key] = (monthlyMap[key] ?? 0) + grandTotal;
     }
+
+    // Commission from line items with staffId
+    final lineItems = (inv['lineItems'] as List? ?? []);
+    for (final itemRaw in lineItems) {
+      final item = Map<String, dynamic>.from(itemRaw);
+      if (item['staffId'] != null) {
+        totalCommission += (item['taxableAmount'] ?? 0) * 0.1;
+      }
+    }
   }
 
-  // Calculate expenses
   double totalExpenses = 0;
   final expenses = LocalStorage.expenseBox.values.toList();
   for (final raw in expenses) {
@@ -219,8 +188,10 @@ DashboardStats _computeStatsFromCache() {
   )).toList();
 
   final customers = LocalStorage.getAllCachedCustomers();
+  final products = LocalStorage.getAllItemCatalog();
 
   return DashboardStats(
+    todaySales: todaySales,
     totalSales: totalSales,
     totalGstCollected: totalGst,
     totalCgst: totalCgst,
@@ -228,6 +199,7 @@ DashboardStats _computeStatsFromCache() {
     totalIgst: totalIgst,
     invoiceCount: invoices.length,
     customerCount: customers.length,
+    productCount: products.length,
     salesGrowth: invoices.length > 1 ? 12.5 : 0,
     totalExpenses: totalExpenses,
     cashSales: cashSales,
@@ -239,26 +211,15 @@ DashboardStats _computeStatsFromCache() {
 }
 
 final recentInvoicesProvider = FutureProvider<List<RecentInvoiceSummary>>((ref) async {
-  try {
-    final apiClient = ref.read(apiClientProvider);
-    final response = await apiClient.get(
-      ApiConstants.invoices,
-      queryParameters: {'limit': 5, 'sortBy': 'createdAt', 'order': 'desc'},
-    );
-    final list = response.data['invoices'] as List? ?? [];
-    return list.map((e) => RecentInvoiceSummary.fromJson(e as Map<String, dynamic>)).toList();
-  } catch (_) {
-    // Fallback to local cache
-    final cached = LocalStorage.getAllCachedInvoices();
-    final sorted = cached
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList()
-      ..sort((a, b) {
-        final da = DateTime.tryParse(a['createdAt'] ?? '') ?? DateTime(2000);
-        final db = DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime(2000);
-        return db.compareTo(da);
-      });
-    return sorted.take(5).map((m) => RecentInvoiceSummary.fromJson(m)).toList();
-  }
+  final cached = LocalStorage.getAllCachedInvoices();
+  final sorted = cached
+      .map((m) => Map<String, dynamic>.from(m))
+      .toList()
+    ..sort((a, b) {
+      final da = DateTime.tryParse(a['createdAt'] ?? '') ?? DateTime(2000);
+      final db = DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime(2000);
+      return db.compareTo(da);
+    });
+  return sorted.take(5).map((m) => RecentInvoiceSummary.fromJson(m)).toList();
 });
 

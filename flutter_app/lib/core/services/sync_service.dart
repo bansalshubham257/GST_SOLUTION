@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -8,8 +10,40 @@ import '../storage/secure_storage.dart';
 
 class SyncService {
   final ApiClient _apiClient;
+  Timer? _debounceTimer;
 
   SyncService(this._apiClient);
+
+  /// Debounced sync: resets the 2s timer on each call, syncs after silence.
+  void queueSync() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(seconds: 2), () {
+      syncAll();
+    });
+  }
+
+  /// Cancel pending sync.
+  void cancelSync() {
+    _debounceTimer?.cancel();
+  }
+
+  /// Listen for changes in Hive data boxes and auto-sync (debounced).
+  /// Call once after user login if plan == 'db_paid'.
+  void watchChanges({bool active = true}) {
+    if (!active) {
+      cancelSync();
+      return;
+    }
+    final boxes = [
+      AppConstants.invoiceBox,
+      AppConstants.customerBox,
+      AppConstants.itemCatalogBox,
+      AppConstants.staffBox,
+    ];
+    for (final name in boxes) {
+      Hive.box(name).watch().listen((_) => queueSync());
+    }
+  }
 
   /// Full sync: push all local data to backend.
   /// Returns true on success (partial errors allowed).
@@ -19,8 +53,9 @@ class SyncService {
       final products = _getAllProducts();
       final invoices = _getAllInvoices();
       final business = _getBusinessData();
+      final staff = _getAllStaff();
 
-      if (customers.isEmpty && products.isEmpty && invoices.isEmpty && business == null) {
+      if (customers.isEmpty && products.isEmpty && invoices.isEmpty && staff.isEmpty && business == null) {
         return true; // nothing to sync
       }
 
@@ -29,6 +64,7 @@ class SyncService {
       if (customers.isNotEmpty) body['customers'] = customers;
       if (products.isNotEmpty) body['products'] = products;
       if (invoices.isNotEmpty) body['invoices'] = invoices;
+      if (staff.isNotEmpty) body['staff'] = staff;
 
       final response = await _apiClient.post(ApiConstants.syncAll, data: body);
       final result = response.data as Map<String, dynamic>;
@@ -66,6 +102,11 @@ class SyncService {
     return box.values.map((m) => _mapInvoice(m)).toList();
   }
 
+  List<Map<String, dynamic>> _getAllStaff() {
+    final box = Hive.box<Map>(AppConstants.staffBox);
+    return box.values.map((m) => _mapStaff(m)).toList();
+  }
+
   Map<String, dynamic> _mapCustomer(Map raw) {
     final m = _toMap(raw);
     return {
@@ -91,6 +132,19 @@ class SyncService {
       'unit_price': (m['unitPrice'] ?? 0).toDouble(),
       'unit': m['unit'] ?? 'Nos',
       'gst_rate': (m['gstRate'] ?? 0).toDouble(),
+    };
+  }
+
+  Map<String, dynamic> _mapStaff(Map raw) {
+    final m = _toMap(raw);
+    return {
+      'id': m['id'],
+      'name': m['name'] ?? '',
+      'role': m['role'] ?? '',
+      'phone': m['phone'] ?? '',
+      'commission_percentage': (m['commissionPercentage'] ?? 0).toDouble(),
+      'total_revenue': (m['totalRevenue'] ?? 0).toDouble(),
+      'total_commission': (m['totalCommission'] ?? 0).toDouble(),
     };
   }
 

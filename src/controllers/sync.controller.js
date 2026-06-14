@@ -16,8 +16,8 @@ const syncAll = async (req, res, next) => {
     return res.status(400).json({ error: 'Business setup required before sync' });
   }
 
-  const { customers, products, invoices, business } = req.body;
-  const results = { customers: 0, products: 0, invoices: 0, errors: [] };
+  const { customers, products, invoices, business, staff } = req.body;
+  const results = { customers: 0, products: 0, invoices: 0, staff: 0, errors: [] };
 
   try {
     await transaction(async (client) => {
@@ -158,6 +158,34 @@ const syncAll = async (req, res, next) => {
             results.invoices++;
           } catch (err) {
             results.errors.push({ type: 'invoice', id: inv.id, error: err.message });
+          }
+        }
+      }
+
+      // Upsert staff
+      if (Array.isArray(staff)) {
+        for (const s of staff) {
+          try {
+            const existing = s.id ? await client.query('SELECT id FROM gst_app.staff WHERE id = $1', [s.id]) : { rows: [] };
+            if (existing.rows.length > 0) {
+              await client.query(
+                `UPDATE gst_app.staff SET name=$1,role=$2,phone=$3,commission_percentage=$4,
+                 total_revenue=COALESCE($5,total_revenue),total_commission=COALESCE($6,total_commission),
+                 updated_at=NOW() WHERE id=$7`,
+                [s.name, s.role||'', s.phone||'', s.commission_percentage||0,
+                 s.total_revenue||0, s.total_commission||0, s.id]
+              );
+            } else {
+              await client.query(
+                `INSERT INTO gst_app.staff (id,business_id,name,role,phone,commission_percentage,total_revenue,total_commission)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                [s.id||uuidv4(), businessId, s.name, s.role||'', s.phone||'',
+                 s.commission_percentage||0, s.total_revenue||0, s.total_commission||0]
+              );
+            }
+            results.staff++;
+          } catch (err) {
+            results.errors.push({ type: 'staff', id: s.id, error: err.message });
           }
         }
       }
