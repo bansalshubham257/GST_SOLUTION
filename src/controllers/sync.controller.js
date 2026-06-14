@@ -148,7 +148,7 @@ const syncAll = async (req, res, next) => {
         for (const inv of invoices) {
           try {
             await client.query('SAVEPOINT sp');
-            const invId = validUuid(inv.id) ? inv.id : null;
+            let invId = validUuid(inv.id) ? inv.id : null;
             const customerId = validUuid(inv.customer_id) ? inv.customer_id : null;
             const lineItems = inv.line_items || inv.lineItems || [];
             const existing = invId ? await client.query('SELECT id FROM gst_app.invoices WHERE id = $1', [invId]) : { rows: [] };
