@@ -165,7 +165,9 @@ class LocalStorage {
   // Business setup
   static Future<void> saveBusinessData(Map<String, dynamic> data) async {
     for (final entry in data.entries) {
-      await businessBox.put(entry.key, entry.value);
+      if (entry.value != null) {
+        await businessBox.put(entry.key, entry.value);
+      }
     }
   }
 

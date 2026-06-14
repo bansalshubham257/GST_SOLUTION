@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,19 @@ import 'core/storage/local_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture Flutter errors to logcat for debugging release builds
+  FlutterError.onError = (details) {
+    debugPrint('=== FLUTTER ERROR ===');
+    debugPrint(details.exceptionAsString());
+    debugPrint(details.stack?.toString() ?? '');
+    debugPrint('=====================');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('=== PLATFORM ERROR: $error ===');
+    debugPrint(stack.toString());
+    return true;
+  };
 
   // Lock to portrait orientation
   await SystemChrome.setPreferredOrientations([
