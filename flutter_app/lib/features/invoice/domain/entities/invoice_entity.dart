@@ -134,6 +134,22 @@ class GstSlabEntity extends Equatable {
     required this.igst,
   });
 
+  factory GstSlabEntity.fromJson(Map<String, dynamic> json) => GstSlabEntity(
+    rate: (json['rate'] ?? 0).toDouble(),
+    taxableAmount: (json['taxableAmount'] ?? 0).toDouble(),
+    cgst: (json['cgst'] ?? 0).toDouble(),
+    sgst: (json['sgst'] ?? 0).toDouble(),
+    igst: (json['igst'] ?? 0).toDouble(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'rate': rate,
+    'taxableAmount': taxableAmount,
+    'cgst': cgst,
+    'sgst': sgst,
+    'igst': igst,
+  };
+
   @override
   List<Object?> get props => [rate];
 }

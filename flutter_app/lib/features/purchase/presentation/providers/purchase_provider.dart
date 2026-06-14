@@ -6,6 +6,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/storage/local_storage.dart';
 import '../../../../core/utils/plan_limits.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../invoice/domain/entities/invoice_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 
 final purchaseListProvider = AsyncNotifierProvider<PurchaseListNotifier, List<PurchaseEntity>>(
@@ -167,7 +168,7 @@ extension PurchaseEntityJson on PurchaseEntity {
       notes: json['notes'],
       termsAndConditions: json['termsAndConditions'],
       gstSlabs: (json['gstSlabs'] as List? ?? [])
-          .map((e) => GstSlabJson.fromJson(e as Map<String, dynamic>))
+          .map((e) => GstSlabEntity.fromJson(e as Map<String, dynamic>))
           .toList(),
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
     );
@@ -247,22 +248,4 @@ extension PurchaseLineItemJson on PurchaseLineItemEntity {
   };
 }
 
-extension GstSlabJson on GstSlabEntity {
-  static GstSlabEntity fromJson(Map<String, dynamic> json) {
-    return GstSlabEntity(
-      rate: (json['rate'] ?? 0).toDouble(),
-      taxableAmount: (json['taxableAmount'] ?? 0).toDouble(),
-      cgst: (json['cgst'] ?? 0).toDouble(),
-      sgst: (json['sgst'] ?? 0).toDouble(),
-      igst: (json['igst'] ?? 0).toDouble(),
-    );
-  }
 
-  Map<String, dynamic> toJson() => {
-    'rate': rate,
-    'taxableAmount': taxableAmount,
-    'cgst': cgst,
-    'sgst': sgst,
-    'igst': igst,
-  };
-}

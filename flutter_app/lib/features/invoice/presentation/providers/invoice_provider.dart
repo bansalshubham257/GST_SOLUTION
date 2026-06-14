@@ -330,7 +330,7 @@ extension InvoiceEntityJson on InvoiceEntity {
       notes: json['notes'],
       termsAndConditions: json['termsAndConditions'],
       gstSlabs: (json['gstSlabs'] as List? ?? [])
-          .map((e) => GstSlabJson.fromJson(e as Map<String, dynamic>))
+          .map((e) => GstSlabEntity.fromJson(e as Map<String, dynamic>))
           .toList(),
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
     );
@@ -417,23 +417,5 @@ extension InvoiceLineItemJson on InvoiceLineItemEntity {
   };
 }
 
-extension GstSlabJson on GstSlabEntity {
-  static GstSlabEntity fromJson(Map<String, dynamic> json) {
-    return GstSlabEntity(
-      rate: (json['rate'] ?? 0).toDouble(),
-      taxableAmount: (json['taxableAmount'] ?? 0).toDouble(),
-      cgst: (json['cgst'] ?? 0).toDouble(),
-      sgst: (json['sgst'] ?? 0).toDouble(),
-      igst: (json['igst'] ?? 0).toDouble(),
-    );
-  }
 
-  Map<String, dynamic> toJson() => {
-    'rate': rate,
-    'taxableAmount': taxableAmount,
-    'cgst': cgst,
-    'sgst': sgst,
-    'igst': igst,
-  };
-}
 
