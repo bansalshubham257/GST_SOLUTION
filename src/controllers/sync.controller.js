@@ -283,11 +283,23 @@ const syncAll = async (req, res, next) => {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+const NUMERIC_COLS = new Set([
+  'sub_total', 'total_cgst', 'total_sgst', 'total_igst', 'total_cess', 'total_tax',
+  'discount_amount', 'grand_total', 'round_off', 'unit_price', 'gst_rate',
+  'stock', 'quantity', 'discount_percent', 'taxable_amount', 'cgst', 'sgst',
+  'igst', 'cess', 'total_amount', 'sort_order', 'commission_percentage',
+  'total_revenue', 'total_commission', 'invoice_count', 'total_business',
+]);
+
 function toCamel(row) {
   const out = {};
   for (const key of Object.keys(row)) {
     const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    out[camel] = row[key];
+    let val = row[key];
+    if (typeof val === 'string' && NUMERIC_COLS.has(key)) {
+      val = parseFloat(val);
+    }
+    out[camel] = val;
   }
   return out;
 }
