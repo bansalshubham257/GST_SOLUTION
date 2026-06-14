@@ -11,16 +11,35 @@ const logger = require('../utils/logger');
  */
 const syncAll = async (req, res, next) => {
   const userId = req.user.id;
-  const businessId = req.user.businessId;
-  if (!businessId) {
-    return res.status(400).json({ error: 'Business setup required before sync' });
-  }
 
+  // Find or create a business for this user
+  let businessId = req.user.businessId || null;
   const { customers, products, invoices, business, staff } = req.body;
   const results = { customers: 0, products: 0, invoices: 0, staff: 0, errors: [] };
 
   try {
     await transaction(async (client) => {
+      // Look up or create business
+      if (!businessId) {
+        const bizResult = await client.query(
+          'SELECT id FROM gst_app.businesses WHERE user_id = $1 AND is_active = true LIMIT 1',
+          [userId]
+        );
+        if (bizResult.rows.length > 0) {
+          businessId = bizResult.rows[0].id;
+        } else if (business) {
+          const newBiz = await client.query(
+            `INSERT INTO gst_app.businesses (id, user_id, name, business_type, state, is_active)
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, true)
+             RETURNING id`,
+            [userId, business.name || 'My Business', business.business_type || 'retail', business.state || '']
+          );
+          businessId = newBiz.rows[0].id;
+        } else {
+          return; // no business to sync to
+        }
+      }
+
       // Update business details if provided
       if (business) {
         const fields = [];

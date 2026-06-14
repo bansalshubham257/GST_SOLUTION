@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -10,40 +8,8 @@ import '../storage/secure_storage.dart';
 
 class SyncService {
   final ApiClient _apiClient;
-  Timer? _debounceTimer;
 
   SyncService(this._apiClient);
-
-  /// Debounced sync: resets the 2s timer on each call, syncs after silence.
-  void queueSync() {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(seconds: 2), () {
-      syncAll();
-    });
-  }
-
-  /// Cancel pending sync.
-  void cancelSync() {
-    _debounceTimer?.cancel();
-  }
-
-  /// Listen for changes in Hive data boxes and auto-sync (debounced).
-  /// Call once after user login if plan == 'db_paid'.
-  void watchChanges({bool active = true}) {
-    if (!active) {
-      cancelSync();
-      return;
-    }
-    final boxes = [
-      AppConstants.invoiceBox,
-      AppConstants.customerBox,
-      AppConstants.itemCatalogBox,
-      AppConstants.staffBox,
-    ];
-    for (final name in boxes) {
-      Hive.box(name).watch().listen((_) => queueSync());
-    }
-  }
 
   /// Full sync: push all local data to backend.
   /// Returns true on success (partial errors allowed).
