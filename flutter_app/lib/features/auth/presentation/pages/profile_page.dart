@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/storage/local_storage.dart';
+import '../../../backup/data/services/backup_service.dart';
 import '../providers/auth_provider.dart';
 
 class ProfilePage extends ConsumerWidget {
@@ -157,6 +158,56 @@ class ProfilePage extends ConsumerWidget {
                   title: 'Invoice Settings',
                   subtitle: 'Prefix, terms, signature, templates',
                   onTap: () => context.push(AppRoutes.invoiceSettings),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Data', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.textSecondaryLight)),
+          const SizedBox(height: 8),
+          AppCard(
+            child: Column(
+              children: [
+                _SettingsItem(
+                  icon: Icons.backup_outlined,
+                  title: 'Export Backup',
+                  subtitle: 'Save data to file & share (WhatsApp, Drive...)',
+                  onTap: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Creating backup...')),
+                    );
+                    await BackupService.exportAndShare();
+                  },
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.restore_outlined,
+                  title: 'Restore Backup',
+                  subtitle: 'Load data from a backup file',
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Restore Backup'),
+                        content: const Text(
+                          'This will overwrite all current local data with the backup. Continue?',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restore')),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                    final ok = await BackupService.importFromPicker();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok ? 'Backup restored successfully' : 'Restore failed'),
+                        backgroundColor: ok ? AppColors.success : AppColors.danger,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
