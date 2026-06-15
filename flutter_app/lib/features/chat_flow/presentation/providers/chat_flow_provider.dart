@@ -825,6 +825,28 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     }
   }
 
+  // ─── Item Management ──────────────────────────────────────────────────────
+
+  void removeItem(int index) {
+    final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+    if (index < 0 || index >= items.length) return;
+    final removed = items.removeAt(index);
+    state = state.copyWith(draft: {...state.draft, 'items': items});
+    _addBotMessage('Removed **${removed['name']}** from the list.');
+  }
+
+  void updateItem(int index, {double? qty, double? price, double? gstRate}) {
+    final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+    if (index < 0 || index >= items.length) return;
+    final item = Map<String, dynamic>.from(items[index]);
+    if (qty != null) item['qty'] = qty;
+    if (price != null) item['price'] = price;
+    if (gstRate != null) item['gstRate'] = gstRate;
+    items[index] = item;
+    state = state.copyWith(draft: {...state.draft, 'items': items});
+    _addBotMessage('Updated **${item['name']}**: qty ${item['qty']}, ₹${item['price']}, GST ${item['gstRate']}%');
+  }
+
   // ─── Back to Menu ──────────────────────────────────────────────────────────
 
   void _goBackToMenu() {
