@@ -61,6 +61,17 @@ class ChatFlowPage extends ConsumerWidget {
                 primaryColor: AppColors.primary,
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 inputBackgroundColor: Colors.white,
+                inputTextColor: const Color(0xFF1A1A2E),
+                inputTextCursorColor: AppColors.primary,
+                inputTextDecoration: const InputDecoration(
+                  hintText: 'Type a message...',
+                  hintStyle: TextStyle(color: Color(0xFF94A3B8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(24)),
+                    borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
                 inputBorderRadius: BorderRadius.circular(24),
                 messageBorderRadius: 12,
                 receivedMessageBodyTextStyle:
