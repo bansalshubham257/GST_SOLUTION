@@ -140,7 +140,6 @@ class ChatFlowPage extends ConsumerWidget {
   }
 
   void _showEditSheet(BuildContext context, WidgetRef ref, int index, Map<String, dynamic> item) {
-    final qtyCtrl = TextEditingController(text: (item['qty'] as num).toString());
     final priceCtrl = TextEditingController(text: (item['price'] as num).toStringAsFixed(2));
     final gstCtrl = TextEditingController(text: (item['gstRate'] as num).toStringAsFixed(0));
     final notifier = ref.read(chatFlowProvider.notifier);
@@ -151,60 +150,103 @@ class ChatFlowPage extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 20, right: 20, top: 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(
-                color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2),
-              )),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          var qty = (item['qty'] as num).toDouble();
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20, right: 20, top: 16,
             ),
-            const SizedBox(height: 12),
-            Text('Edit ${item['name']}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: qtyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(width: 40, height: 4, decoration: BoxDecoration(
+                    color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2),
+                  )),
+                ),
+                const SizedBox(height: 12),
+                Text('Edit ${item['name']}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    const Text('Quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      color: AppColors.primary,
+                      onPressed: qty > 0
+                          ? () => setSheetState(() {
+                                qty = (qty - 1).clamp(0, 9999);
+                              })
+                          : null,
+                    ),
+                    Container(
+                      width: 60,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        qty.toStringAsFixed(qty == qty.roundToDouble() ? 0 : 1),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      color: AppColors.primary,
+                      onPressed: () => setSheetState(() {
+                        qty = (qty + 1).clamp(0, 9999);
+                      }),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Unit Price (₹)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: gstCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'GST Rate (%)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      notifier.updateItem(
+                        index,
+                        qty: qty,
+                        price: double.tryParse(priceCtrl.text),
+                        gstRate: double.tryParse(gstCtrl.text),
+                      );
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Unit Price', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: gstCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'GST Rate (%)', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  notifier.updateItem(
-                    index,
-                    qty: double.tryParse(qtyCtrl.text),
-                    price: double.tryParse(priceCtrl.text),
-                    gstRate: double.tryParse(gstCtrl.text),
-                  );
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
