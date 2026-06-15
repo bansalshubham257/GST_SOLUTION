@@ -46,9 +46,6 @@ class ChatFlowPage extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          if (chatState.step != ChatFlowStep.mainMenu ||
-              chatState.quickReplyOptions.isNotEmpty)
-            _buildQuickReplies(chatState, ref),
           Expanded(
             child: Chat(
               messages: chatState.messages,
@@ -87,6 +84,8 @@ class ChatFlowPage extends ConsumerWidget {
               ),
             ),
           ),
+          if (chatState.quickReplyOptions.isNotEmpty)
+            _buildQuickReplies(chatState, ref),
         ],
       ),
     );
