@@ -40,6 +40,10 @@ class PurchaseListNotifier extends AsyncNotifier<List<PurchaseEntity>> {
 
   Future<void> removePurchase(String id) async {
     await LocalStorage.deletePurchase(id);
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.delete('/purchases/$id');
+    } catch (_) {}
     final current = state.valueOrNull ?? [];
     state = AsyncData(current.where((p) => p.id != id).toList());
   }

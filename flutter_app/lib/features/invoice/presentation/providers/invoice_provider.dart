@@ -123,6 +123,10 @@ class InvoiceListNotifier extends AsyncNotifier<List<InvoiceEntity>> {
 
   Future<void> removeInvoice(String id) async {
     await LocalStorage.deleteInvoice(id);
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      await apiClient.delete('/invoices/$id');
+    } catch (_) {}
     final current = state.valueOrNull ?? [];
     state = AsyncData(current.where((inv) => inv.id != id).toList());
   }

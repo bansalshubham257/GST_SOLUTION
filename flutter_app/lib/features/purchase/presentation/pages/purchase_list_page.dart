@@ -363,7 +363,9 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
                   ),
                 );
                 if (confirmed == true) {
-                  await LocalStorage.deletePurchase(id.toString());
+                  await ref
+                      .read(purchaseListProvider.notifier)
+                      .removePurchase(id.toString());
                   setState(() {});
                 }
               }

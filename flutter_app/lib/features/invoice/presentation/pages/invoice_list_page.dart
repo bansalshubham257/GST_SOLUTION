@@ -369,7 +369,9 @@ class _InvoiceListPageState extends ConsumerState<InvoiceListPage> {
                   ),
                 );
                 if (confirmed == true) {
-                  await LocalStorage.deleteInvoice(id.toString());
+                  await ref
+                      .read(invoiceListProvider.notifier)
+                      .removeInvoice(id.toString());
                   setState(() {});
                 }
               }
