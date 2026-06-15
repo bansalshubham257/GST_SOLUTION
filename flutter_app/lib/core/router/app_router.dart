@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/chat_flow/presentation/pages/chat_flow_page.dart';
 import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/otp_verification_page.dart';
 import '../../features/auth/presentation/pages/profile_page.dart';
@@ -62,6 +63,7 @@ class AppRoutes {
   static const String gstr3b = '/gst/gstr3b';
   static const String gstFiling = '/gst-filing';
   static const String chatSupport = '/chat-support';
+  static const String chatFlow = '/chat-flow';
   static const String serviceCatalog = '/reports';
   static const String addService = '/reports/catalog/add';
   static const String editServiceItem = '/reports/catalog/edit';
@@ -172,6 +174,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.chatSupport,
         name: 'chat-support',
         builder: (context, state) => const ChatSupportPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.chatFlow,
+        name: 'chat-flow',
+        builder: (context, state) => const ChatFlowPage(),
       ),
       GoRoute(
         path: AppRoutes.profile,

@@ -19,6 +19,59 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
+  void _showFabOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const CircleAvatar(
+                  backgroundColor: AppColors.primarySurface,
+                  child: Icon(Icons.add_rounded, color: AppColors.primary)),
+              title: const Text('Quick Sale',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Create a sale in few taps'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push(AppRoutes.quickServiceEntry);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const CircleAvatar(
+                  backgroundColor: AppColors.accentSurface,
+                  child: Icon(Icons.smart_toy_outlined,
+                      color: AppColors.accentDark)),
+              title: const Text('Chat Assistant',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Create staff, customers, sales by chat'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push(AppRoutes.chatFlow);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,7 +98,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(AppRoutes.quickServiceEntry),
+        onPressed: () => _showFabOptions(context),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 6,
