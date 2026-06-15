@@ -27,6 +27,7 @@ enum ChatFlowStep {
   customerAddress,
   customerConfirm,
   // Sale
+  saleCustomerSelect,
   saleStaffSelect,
   saleItemName,
   saleItemQty,
@@ -203,6 +204,8 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       _handleCustomerAddress(text);
     } else if (step == ChatFlowStep.customerConfirm) {
       _handleCustomerConfirm(text);
+    } else if (step == ChatFlowStep.saleCustomerSelect) {
+      _handleSaleCustomerSelect(text);
     } else if (step == ChatFlowStep.saleStaffSelect) {
       _handleSaleStaffSelect(text);
     } else if (step == ChatFlowStep.saleItemName) {
@@ -409,51 +412,138 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       draft: {'items': <Map<String, dynamic>>[], 'paymentMode': 'cash'},
       activeEntity: FlowEntity.sale,
     );
-    _addBotMessage('Let\'s create a sale! 🧾\n\n'
-        'Do you want to assign a staff member?');
-    _setStep(ChatFlowStep.saleStaffSelect, options: ['👤 Select Staff', '⏭️ Skip Staff']);
+    _askSaleCustomer();
+  }
+
+  void _askSaleCustomer() {
+    final customers = LocalStorage.customerBox.values.toList();
+    final options = customers.map((c) => '👥 ${c['name']}').toList();
+    options.add('⏭️ Walk-in Customer');
+    _addBotMessage('Let\'s create a sale! 🧾\n\nSelect a customer (optional):');
+    _setStep(ChatFlowStep.saleCustomerSelect, options: options);
+  }
+
+  void _handleSaleCustomerSelect(String text) {
+    if (text.contains('Skip') || text.contains('⏭️')) {
+      _addBotMessage('Walk-in Customer selected.');
+    } else {
+      final name = text.replaceFirst('👥 ', '').trim();
+      final customers = LocalStorage.customerBox.values.toList();
+      final matched = customers.where((c) => c['name'].toString().toLowerCase() == name.toLowerCase()).firstOrNull;
+      if (matched != null) {
+        state = state.copyWith(
+          draft: {
+            ...state.draft,
+            'customerId': matched['id'],
+            'customerName': matched['name'],
+            'customerGstin': matched['gstin'],
+          },
+        );
+        _addBotMessage('Customer **${matched['name']}** selected!');
+      } else {
+        _addBotMessage('Customer not found. Using Walk-in.');
+      }
+    }
+    _askSaleStaff();
+  }
+
+  void _askSaleStaff() {
+    final staffList = LocalStorage.staffBox.values.toList();
+    if (staffList.isEmpty) {
+      _addBotMessage('No staff members found. Proceeding without staff.');
+      _askSaleItemName();
+    } else {
+      final options = staffList.map((s) => '👤 ${s['name']}').toList();
+      options.add('⏭️ Skip Staff');
+      _addBotMessage('Select a staff member (optional):');
+      _setStep(ChatFlowStep.saleStaffSelect, options: options);
+    }
   }
 
   void _handleSaleStaffSelect(String text) {
-    if (text == 'skip' || text.contains('Skip') || text.contains('⏭️')) {
+    if (text.contains('Skip') || text.contains('⏭️')) {
       _addBotMessage('Staff skipped.');
-      _askSaleItemName();
     } else {
-      final staff = LocalStorage.staffBox.values.toList();
-      final matched = staff.where((s) => s['name'].toString().toLowerCase() == text.toLowerCase()).firstOrNull;
+      final name = text.replaceFirst('👤 ', '').trim();
+      final staffList = LocalStorage.staffBox.values.toList();
+      final matched = staffList.where((s) => s['name'].toString().toLowerCase() == name.toLowerCase()).firstOrNull;
       if (matched != null) {
         state = state.copyWith(
           draft: {...state.draft, 'staffId': matched['id'], 'staffName': matched['name']},
         );
         _addBotMessage('Staff **${matched['name']}** selected!');
-        _askSaleItemName();
       } else {
-        _addBotMessage('Staff not found. Skipping...');
-        _askSaleItemName();
+        _addBotMessage('Staff skipped.');
       }
     }
+    _askSaleItemName();
   }
 
   void _askSaleItemName() {
-    _addBotMessage('What is the item/service name?');
-    _setStep(ChatFlowStep.saleItemName);
+    final items = LocalStorage.itemCatalogBox.values.toList();
+    if (items.isEmpty) {
+      _addBotMessage('What is the item name?');
+      _setStep(ChatFlowStep.saleItemName);
+    } else {
+      final options = items.map((item) => '📦 ${item['name']}').toList();
+      options.add('➕ Other (type name)');
+      _addBotMessage('Select an item or add a new one:');
+      _setStep(ChatFlowStep.saleItemName, options: options);
+    }
   }
 
   void _handleSaleItemName(String text) {
-    state = state.copyWith(
-      draft: {...state.draft, '_currentItem': {'name': text}},
-    );
-    _addBotMessage('Quantity for **$text**? (e.g., 1, 2.5)');
-    _setStep(ChatFlowStep.saleItemQty);
+    if (text.startsWith('➕')) {
+      _addBotMessage('Type the item name:');
+      _setStep(ChatFlowStep.saleItemName);
+    } else if (text.startsWith('📦')) {
+      final name = text.substring(2).trim();
+      final items = LocalStorage.itemCatalogBox.values.toList();
+      final matched = items.where((item) => item['name'].toString() == name).firstOrNull;
+      if (matched != null) {
+        final price = (matched['unitPrice'] ?? 0).toDouble();
+        final gstRate = (matched['gstRate'] ?? 0).toDouble();
+        state = state.copyWith(
+          draft: {
+            ...state.draft,
+            '_currentItem': {'name': matched['name'], 'price': price, 'gstRate': gstRate, '_fromCatalog': true},
+          },
+        );
+        _addBotMessage('**${matched['name']}** selected (₹$price, GST: ${gstRate.toStringAsFixed(0)}%).\nQuantity? (e.g., 1, 2.5)');
+        _setStep(ChatFlowStep.saleItemQty);
+      } else {
+        _addBotMessage('Item not found. Type the name:');
+        _setStep(ChatFlowStep.saleItemName);
+      }
+    } else {
+      state = state.copyWith(
+        draft: {...state.draft, '_currentItem': {'name': text}},
+      );
+      _addBotMessage('Quantity for **$text**? (e.g., 1, 2.5)');
+      _setStep(ChatFlowStep.saleItemQty);
+    }
   }
 
   void _handleSaleItemQty(String text) {
     final qty = double.tryParse(text) ?? 1;
-    state = state.copyWith(
-      draft: {...state.draft, '_currentItem': {...(state.draft['_currentItem'] as Map<String, dynamic>? ?? {}), 'qty': qty}},
-    );
-    _addBotMessage('Unit price? (e.g., 500)');
-    _setStep(ChatFlowStep.saleItemPrice);
+    final currentItem = Map<String, dynamic>.from(state.draft['_currentItem'] as Map? ?? {});
+    currentItem['qty'] = qty;
+    if (currentItem['_fromCatalog'] == true) {
+      final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+      items.add({
+        'name': currentItem['name'],
+        'qty': qty,
+        'price': currentItem['price'],
+        'gstRate': currentItem['gstRate'],
+      });
+      state = state.copyWith(draft: {...state.draft, 'items': items, '_currentItem': null});
+      _addBotMessage('✅ **${currentItem['name']}** added ($qty × ₹${currentItem['price']}, GST: ${currentItem['gstRate'].toStringAsFixed(0)}%)\n\nAdd more items?');
+      _setStep(ChatFlowStep.saleMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+    } else {
+      state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
+      _addBotMessage('Unit price? (e.g., 500)');
+      _setStep(ChatFlowStep.saleItemPrice);
+    }
   }
 
   void _handleSaleItemPrice(String text) {
@@ -547,7 +637,9 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
         final invoice = {
           'id': id,
           'invoiceNumber': invoiceNum,
-          'customerName': 'Walk-in Customer',
+          'customerName': d['customerName'] ?? 'Walk-in Customer',
+          if (d['customerId'] != null) 'customerId': d['customerId'],
+          if (d['customerGstin'] != null) 'customerGstin': d['customerGstin'],
           'invoiceDate': now.toIso8601String(),
           'createdAt': now.toIso8601String(),
           'lineItems': lineItems,
@@ -592,25 +684,70 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
   }
 
   void _askPurchaseItemName() {
-    _addBotMessage('What is the item name?');
-    _setStep(ChatFlowStep.purchaseItemName);
+    final items = LocalStorage.itemCatalogBox.values.toList();
+    if (items.isEmpty) {
+      _addBotMessage('What is the item name?');
+      _setStep(ChatFlowStep.purchaseItemName);
+    } else {
+      final options = items.map((item) => '📦 ${item['name']}').toList();
+      options.add('➕ Other (type name)');
+      _addBotMessage('Select an item or add a new one:');
+      _setStep(ChatFlowStep.purchaseItemName, options: options);
+    }
   }
 
   void _handlePurchaseItemName(String text) {
-    state = state.copyWith(
-      draft: {...state.draft, '_currentItem': {'name': text}},
-    );
-    _addBotMessage('Quantity? (e.g., 10, 25)');
-    _setStep(ChatFlowStep.purchaseItemQty);
+    if (text.startsWith('➕')) {
+      _addBotMessage('Type the item name:');
+      _setStep(ChatFlowStep.purchaseItemName);
+    } else if (text.startsWith('📦')) {
+      final name = text.substring(2).trim();
+      final items = LocalStorage.itemCatalogBox.values.toList();
+      final matched = items.where((item) => item['name'].toString() == name).firstOrNull;
+      if (matched != null) {
+        final price = (matched['unitPrice'] ?? 0).toDouble();
+        final gstRate = (matched['gstRate'] ?? 0).toDouble();
+        state = state.copyWith(
+          draft: {
+            ...state.draft,
+            '_currentItem': {'name': matched['name'], 'price': price, 'gstRate': gstRate, '_fromCatalog': true},
+          },
+        );
+        _addBotMessage('**${matched['name']}** selected (₹$price, GST: ${gstRate.toStringAsFixed(0)}%).\nQuantity? (e.g., 10, 25)');
+        _setStep(ChatFlowStep.purchaseItemQty);
+      } else {
+        _addBotMessage('Item not found. Type the name:');
+        _setStep(ChatFlowStep.purchaseItemName);
+      }
+    } else {
+      state = state.copyWith(
+        draft: {...state.draft, '_currentItem': {'name': text}},
+      );
+      _addBotMessage('Quantity for **$text**? (e.g., 10, 25)');
+      _setStep(ChatFlowStep.purchaseItemQty);
+    }
   }
 
   void _handlePurchaseItemQty(String text) {
     final qty = double.tryParse(text) ?? 1;
-    state = state.copyWith(
-      draft: {...state.draft, '_currentItem': {...(state.draft['_currentItem'] as Map<String, dynamic>? ?? {}), 'qty': qty}},
-    );
-    _addBotMessage('Unit price? (e.g., 100)');
-    _setStep(ChatFlowStep.purchaseItemPrice);
+    final currentItem = Map<String, dynamic>.from(state.draft['_currentItem'] as Map? ?? {});
+    currentItem['qty'] = qty;
+    if (currentItem['_fromCatalog'] == true) {
+      final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+      items.add({
+        'name': currentItem['name'],
+        'qty': qty,
+        'price': currentItem['price'],
+        'gstRate': currentItem['gstRate'],
+      });
+      state = state.copyWith(draft: {...state.draft, 'items': items, '_currentItem': null});
+      _addBotMessage('✅ **${currentItem['name']}** added ($qty × ₹${currentItem['price']}, GST: ${currentItem['gstRate'].toStringAsFixed(0)}%)\n\nAdd more items?');
+      _setStep(ChatFlowStep.purchaseMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+    } else {
+      state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
+      _addBotMessage('Unit price? (e.g., 100)');
+      _setStep(ChatFlowStep.purchaseItemPrice);
+    }
   }
 
   void _handlePurchaseItemPrice(String text) {
