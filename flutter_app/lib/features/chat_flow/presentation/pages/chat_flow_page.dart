@@ -5,6 +5,7 @@ import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/storage/local_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../providers/chat_flow_provider.dart';
 
@@ -48,12 +49,12 @@ class ChatFlowPage extends ConsumerWidget {
         children: [
           if (chatState.step != ChatFlowStep.mainMenu ||
               chatState.quickReplyOptions.isNotEmpty)
-            _buildQuickReplies(chatState, ref),
+            _buildQuickReplies(chatState, ref, context),
           Expanded(
             child: Chat(
               messages: chatState.messages,
               onSendPressed: (p) =>
-                  ref.read(chatFlowProvider.notifier).handleInput(p.text),
+                  _onTextSend(p.text, ref, context),
               user: const types.User(id: 'chatflow-user', firstName: 'You'),
               showUserAvatars: true,
               showUserNames: false,
@@ -92,7 +93,51 @@ class ChatFlowPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickReplies(ChatFlowState state, WidgetRef ref) {
+  void _onTextSend(String text, WidgetRef ref, BuildContext context) {
+    final state = ref.read(chatFlowProvider);
+    if (state.step == ChatFlowStep.saleStaffSelect &&
+        (text.contains('Select') || text.contains('👤'))) {
+      _showStaffPicker(context, ref);
+    } else {
+      ref.read(chatFlowProvider.notifier).handleInput(text);
+    }
+  }
+
+  void _onChipTap(String text, WidgetRef ref, BuildContext context) {
+    final state = ref.read(chatFlowProvider);
+    if (state.step == ChatFlowStep.saleStaffSelect &&
+        (text.contains('Select') || text.contains('👤'))) {
+      _showStaffPicker(context, ref);
+    } else {
+      ref.read(chatFlowProvider.notifier).handleInput(text);
+    }
+  }
+
+  void _showStaffPicker(BuildContext context, WidgetRef ref) {
+    final staff = LocalStorage.staffBox.values.toList();
+    final notifier = ref.read(chatFlowProvider.notifier);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _StaffPickerSheet(
+        staff: staff,
+        onSelect: (name) {
+          notifier.handleInput(name);
+          Navigator.pop(ctx);
+        },
+        onSkip: () {
+          notifier.handleInput('skip');
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuickReplies(ChatFlowState state, WidgetRef ref, BuildContext context) {
     final options = state.quickReplyOptions;
     if (options.isEmpty) return const SizedBox.shrink();
 
@@ -105,8 +150,7 @@ class ChatFlowPage extends ConsumerWidget {
         itemCount: options.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) => GestureDetector(
-          onTap: () =>
-              ref.read(chatFlowProvider.notifier).handleInput(options[i]),
+          onTap: () => _onChipTap(options[i], ref, context),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -123,6 +167,164 @@ class ChatFlowPage extends ConsumerWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Staff Picker Bottom Sheet ───────────────────────────────────────────────
+
+class _StaffPickerSheet extends StatefulWidget {
+  final List<Map<dynamic, dynamic>> staff;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onSkip;
+
+  const _StaffPickerSheet({
+    required this.staff,
+    required this.onSelect,
+    required this.onSkip,
+  });
+
+  @override
+  State<_StaffPickerSheet> createState() => _StaffPickerSheetState();
+}
+
+class _StaffPickerSheetState extends State<_StaffPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<Map<dynamic, dynamic>> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.staff;
+    _searchCtrl.addListener(_filter);
+  }
+
+  void _filter() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? widget.staff
+          : widget.staff.where((s) {
+              final name = (s['name'] ?? '').toString().toLowerCase();
+              final phone = (s['phone'] ?? '').toString();
+              return name.contains(q) || phone.contains(q);
+            }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.55,
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.group, size: 20, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Select Staff Member',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: widget.onSkip,
+                    icon: const Icon(Icons.skip_next, size: 18),
+                    label: const Text('Skip'),
+                  ),
+                ],
+              ),
+            ),
+            // Search
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Search by name or phone...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => _searchCtrl.clear(),
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            // Staff list
+            Expanded(
+              child: _filtered.isEmpty
+                  ? const Center(
+                      child: Text('No staff members found',
+                          style: TextStyle(color: Colors.grey)),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: _filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                      itemBuilder: (_, i) {
+                        final s = _filtered[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.primarySurface,
+                            child: Text(
+                              (s['name'] ?? '?').toString()[0].toUpperCase(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            '${s['name']}',
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            s['role'] != null ? '${s['role']}' : '',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+                          onTap: () => widget.onSelect('${s['name']}'),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );

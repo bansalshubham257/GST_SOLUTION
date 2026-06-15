@@ -28,7 +28,6 @@ enum ChatFlowStep {
   customerConfirm,
   // Sale
   saleStaffSelect,
-  saleStaffConfirm,
   saleItemName,
   saleItemQty,
   saleItemPrice,
@@ -206,8 +205,6 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       _handleCustomerConfirm(text);
     } else if (step == ChatFlowStep.saleStaffSelect) {
       _handleSaleStaffSelect(text);
-    } else if (step == ChatFlowStep.saleStaffConfirm) {
-      _handleSaleStaffConfirm(text);
     } else if (step == ChatFlowStep.saleItemName) {
       _handleSaleItemName(text);
     } else if (step == ChatFlowStep.saleItemQty) {
@@ -348,12 +345,12 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
   void _handleCustomerPhone(String text) {
     state = state.copyWith(draft: {...state.draft, 'phone': text});
-    _addBotMessage('What is their GSTIN? (optional — type "skip" to skip)');
-    _setStep(ChatFlowStep.customerGstin);
+    _addBotMessage('What is their GSTIN? (optional)');
+    _setStep(ChatFlowStep.customerGstin, options: ['⏭️ Skip GSTIN']);
   }
 
   void _handleCustomerGstin(String text) {
-    if (text.toLowerCase() == 'skip') {
+    if (text.toLowerCase().contains('skip')) {
       state = state.copyWith(draft: {...state.draft, 'gstin': ''});
     } else {
       state = state.copyWith(draft: {...state.draft, 'gstin': text});
@@ -364,12 +361,12 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
   void _handleCustomerState(String text) {
     state = state.copyWith(draft: {...state.draft, 'state': text});
-    _addBotMessage('What is their address? (optional — type "skip" to skip)');
-    _setStep(ChatFlowStep.customerAddress);
+    _addBotMessage('What is their address? (optional)');
+    _setStep(ChatFlowStep.customerAddress, options: ['⏭️ Skip Address']);
   }
 
   void _handleCustomerAddress(String text) {
-    if (text.toLowerCase() != 'skip') {
+    if (!text.toLowerCase().contains('skip')) {
       state = state.copyWith(draft: {...state.draft, 'address': text});
     }
     final d = state.draft;
@@ -418,47 +415,23 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
   }
 
   void _handleSaleStaffSelect(String text) {
-    if (text.contains('Select') || text.contains('👤')) {
-      final staff = LocalStorage.staffBox.values.toList();
-      if (staff.isEmpty) {
-        _addBotMessage('No staff members found. Skipping...');
-        _askSaleItemName();
-      } else {
-        final names = staff.map((s) => '${s['name']}').take(6).toList();
-        _addBotMessage('Select a staff member:\n\n${names.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n')}');
-        state = state.copyWith(
-          step: ChatFlowStep.saleStaffConfirm,
-          quickReplyOptions: names,
-          draft: {...state.draft, '_staffList': staff.map((s) => Map<String, dynamic>.from(s)).toList()},
-        );
-      }
-    } else {
+    if (text == 'skip' || text.contains('Skip') || text.contains('⏭️')) {
+      _addBotMessage('Staff skipped.');
       _askSaleItemName();
-    }
-  }
-
-  void _handleSaleStaffConfirm(String text) {
-    final staffList = (state.draft['_staffList'] as List<Map<String, dynamic>>? ?? []);
-    final idx = int.tryParse(text.split('.').first);
-    if (idx != null && idx >= 1 && idx <= staffList.length) {
-      final s = staffList[idx - 1];
-      state = state.copyWith(
-        draft: {...state.draft, 'staffId': s['id'], 'staffName': s['name'], '_staffList': null},
-      );
-      _addBotMessage('Staff **${s['name']}** selected!');
     } else {
-      final matched = staffList.where((s) => s['name'].toString().toLowerCase() == text.toLowerCase()).firstOrNull;
+      final staff = LocalStorage.staffBox.values.toList();
+      final matched = staff.where((s) => s['name'].toString().toLowerCase() == text.toLowerCase()).firstOrNull;
       if (matched != null) {
         state = state.copyWith(
-          draft: {...state.draft, 'staffId': matched['id'], 'staffName': matched['name'], '_staffList': null},
+          draft: {...state.draft, 'staffId': matched['id'], 'staffName': matched['name']},
         );
         _addBotMessage('Staff **${matched['name']}** selected!');
+        _askSaleItemName();
       } else {
         _addBotMessage('Staff not found. Skipping...');
-        state = state.copyWith(draft: {...state.draft, '_staffList': null});
+        _askSaleItemName();
       }
     }
-    _askSaleItemName();
   }
 
   void _askSaleItemName() {
