@@ -73,6 +73,9 @@ class RecentInvoiceTile extends StatelessWidget {
   }
 
   Widget _buildStatusBadge() {
+    if (invoice.paymentStatus == 'unpaid') {
+      return const StatusBadge(label: 'Unpaid', type: StatusType.danger);
+    }
     switch (invoice.status.toLowerCase()) {
       case 'paid':
         return const StatusBadge(label: 'Paid', type: StatusType.success);

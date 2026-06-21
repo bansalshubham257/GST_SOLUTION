@@ -407,12 +407,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           ],
         ),
         const SizedBox(height: 8),
-        ...List.generate(
-            _lineItems.length,
-            (i) => Padding(
+        ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: _lineItems.length,
+            itemBuilder: (_, i) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _buildLineItemCard(i),
-                )),
+                ),
+          ),
       ],
     );
   }
@@ -948,6 +952,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       'invoiceDate': _invoiceDate.toIso8601String(),
       'dueDate': _dueDate?.toIso8601String(),
       'status': isDraft ? 'draft' : (_isFullyPaid ? 'paid' : 'sent'),
+      'paymentStatus': isDraft ? 'unpaid' : (_isFullyPaid ? 'paid' : 'unpaid'),
       'paymentMode': _paymentMode,
       'isInterState': isInter,
       'lineItems': _lineItems.map((item) {

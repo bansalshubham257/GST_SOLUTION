@@ -4,8 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/storage/local_storage.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/ad_banner_widget.dart';
 import '../../../../core/widgets/app_widgets.dart';
+import '../../../backup/data/services/backup_service.dart';
+import '../../../backup/data/services/backup_settings_provider.dart';
+import '../../../../features/settings/presentation/providers/feature_settings_provider.dart';
+import '../../../invoice/presentation/providers/item_catalog_provider.dart';
+import '../../../invoice/presentation/providers/item_settings_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/recent_invoice_tile.dart';
 
@@ -20,11 +27,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
   bool _showPaymentBreakdown = false;
   bool _showPurchaseDetails = false;
+  final Set<String> _dismissedAlerts = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadDismissedAlerts();
+  }
+
+  void _loadDismissedAlerts() {
+    // Load dismissed alerts from disk (stored with stock/expiry state)
+    final box = LocalStorage.settingsBox;
+    final list = box.get('dismissed_alerts', defaultValue: <String>[]) as List;
+    _dismissedAlerts.addAll(list.cast<String>());
+  }
+
+  void _dismissAlert(String id, String stateKey) {
+    final key = '$id|$stateKey';
+    setState(() => _dismissedAlerts.add(key));
+    final box = LocalStorage.settingsBox;
+    final list = box.get('dismissed_alerts', defaultValue: <String>[]) as List;
+    box.put('dismissed_alerts', [...list.cast<String>(), key]);
+  }
+
+  void _clearDismissedAlerts() {
+    _dismissedAlerts.clear();
+    LocalStorage.settingsBox.delete('dismissed_alerts');
   }
 
   @override
@@ -37,6 +66,15 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshStats();
+      _tryAutoBackup();
+    }
+  }
+
+  void _tryAutoBackup() {
+    final settings = ref.read(backupSettingsProvider);
+    if (settings.isDue) {
+      BackupService.saveLocalBackup();
+      ref.read(backupSettingsProvider.notifier).markBackupDone();
     }
   }
 
@@ -80,18 +118,76 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildStockAlerts(),
+              const SizedBox(height: 16),
               stats.when(
-                data: (data) => Column(
-                  children: [
-                    _buildDailySummary(context, data),
-                    if (data.purchaseCount > 0) ...[
+                data: (data) {
+                  final features = ref.watch(featureSettingsProvider);
+                  return Column(
+                    children: [
+                      _buildDailySummary(context, data),
                       const SizedBox(height: 16),
-                      _buildPurchaseSummary(context, data),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _MetricCard(
+                              label: 'Orders',
+                              value: '${data.totalOrders}',
+                              icon: Icons.receipt_long,
+                              color: AppColors.secondary,
+                              bgColor: AppColors.primarySurface,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _MetricCard(
+                              label: 'Pending Payments',
+                              value: '${data.pendingPaymentCount}',
+                              icon: Icons.pending_actions,
+                              color: AppColors.warning,
+                              bgColor: AppColors.warningLight,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _MetricCard(
+                              label: data.pendingPaymentAmount > 0 ? 'Due Amount' : 'No Dues',
+                              value: data.pendingPaymentAmount > 0 ? '₹${_formatAmount(data.pendingPaymentAmount)}' : '₹0',
+                              icon: Icons.currency_rupee,
+                              color: data.pendingPaymentAmount > 0 ? AppColors.danger : AppColors.success,
+                              bgColor: data.pendingPaymentAmount > 0 ? AppColors.dangerLight : AppColors.successLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (data.purchaseCount > 0 && features.showPurchases) ...[
+                        const SizedBox(height: 16),
+                        _buildPurchaseSummary(context, data),
+                      ],
                     ],
-                  ],
-                ),
+                  );
+                },
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => _buildOfflineBanner(),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: AppColors.textTertiaryLight),
+                        const SizedBox(height: 12),
+                        Text('Could not load dashboard data',
+                            style: TextStyle(color: AppColors.textSecondaryLight)),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _refreshStats,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               _buildQuickActions(context),
@@ -144,6 +240,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (_, __) => const SizedBox.shrink(),
               ),
+              AdBannerWidget(),
               const SizedBox(height: 80),
             ],
           ),
@@ -152,30 +249,167 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     );
   }
 
-  Widget _buildOfflineBanner() {
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const Icon(Icons.cloud_off, color: AppColors.warning),
-            const SizedBox(width: 12),
-            const Expanded(
-                child: Text('Offline — showing cached data',
-                    style: TextStyle(color: AppColors.textSecondaryLight))),
-            TextButton(
-              onPressed: _refreshStats,
-              child: const Text('Retry'),
+  Widget _buildStockAlerts() {
+    final items = ref.watch(itemCatalogProvider);
+    final itemSettings = ref.watch(itemSettingsProvider);
+    final defaultThreshold = itemSettings.defaultLowStockThreshold;
+    debugPrint('[StockAlerts] items=${items.length} settings={stock:${itemSettings.showStock}, alert:${itemSettings.showLowStockAlert}, threshold:$defaultThreshold}');
+    for (final i in items) {
+      debugPrint('[StockAlerts] item=${i.name} stock=${i.stock} threshold=${i.lowStockThreshold} isService=${i.isService} isOutOfStock=${i.isOutOfStock} isLowStock=${i.isLowStock}');
+    }
+    // Direct computation to catch any item needing attention
+    final lowStock = items.where((i) {
+      final dismissKey = 'stock_${i.id}|v${i.stock}';
+      if (_dismissedAlerts.contains(dismissKey)) return false;
+      if (i.isService) return false;
+      if (i.stock == 0) return true;
+      final threshold = i.lowStockThreshold ?? defaultThreshold;
+      if (i.stock <= threshold) return true;
+      return false;
+    }).toList();
+    final expired = items.where((i) {
+      final dismissKey = 'expiry_${i.id}|v${i.expiryDate?.millisecondsSinceEpoch ?? 0}';
+      return i.isExpired && !_dismissedAlerts.contains(dismissKey);
+    }).toList();
+
+    final trackable = items.where((i) => !i.isService && (i.stock > 0 || i.lowStockThreshold != null)).length;
+    final totalNonService = items.where((i) => !i.isService).length;
+
+    final alerts = <Widget>[];
+
+    if (lowStock.isNotEmpty) {
+      alerts.add(
+        AppCard(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.inventory, size: 18, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('${lowStock.length} item${lowStock.length > 1 ? 's' : ''} need attention',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 16),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      color: AppColors.textTertiaryLight,
+                      onPressed: () {
+                        for (final i in lowStock) _dismissAlert('stock_${i.id}', 'v${i.stock}');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...lowStock.take(3).map((i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(i.stock == 0 ? Icons.error_outline : Icons.warning_amber_rounded,
+                              size: 14, color: i.stock == 0 ? AppColors.danger : AppColors.warning),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text('${i.name} — ${i.stock == 0 ? "Out of stock" : "Stock: ${i.stock.toStringAsFixed(0)}"}',
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight))),
+                          if (i.lowStockThreshold != null)
+                            Text('min: ${i.lowStockThreshold!.toStringAsFixed(0)}',
+                                style: const TextStyle(fontSize: 10, color: AppColors.textTertiaryLight)),
+                        ],
+                      ),
+                    )),
+                if (lowStock.length > 3)
+                  Text('+${lowStock.length - 3} more',
+                      style: const TextStyle(fontSize: 11, color: AppColors.primary)),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-    );
+      );
+    }
+
+    if (expired.isNotEmpty) {
+      alerts.add(const SizedBox(height: 8));
+      alerts.add(
+        AppCard(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.event_busy, size: 18, color: AppColors.danger),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('${expired.length} item${expired.length > 1 ? 's' : ''} expired',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 16),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      color: AppColors.textTertiaryLight,
+                      onPressed: () {
+                        for (final i in expired) _dismissAlert('expiry_${i.id}', 'v${i.expiryDate?.millisecondsSinceEpoch ?? 0}');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...expired.take(3).map((i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.block, size: 14, color: AppColors.danger),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(i.name,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight))),
+                          if (i.expiryDate != null)
+                            Text('Exp: ${DateFormat('dd/MM/yy').format(i.expiryDate!)}',
+                                style: const TextStyle(fontSize: 10, color: AppColors.textTertiaryLight)),
+                        ],
+                      ),
+                    )),
+                if (expired.length > 3)
+                  Text('+${expired.length - 3} more',
+                      style: const TextStyle(fontSize: 11, color: AppColors.primary)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Always show a stock summary so the section is visible
+    if (alerts.isEmpty) {
+      alerts.add(
+        AppCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('$totalNonService items · $trackable tracked  —  all stocked',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(children: alerts);
   }
 
   Widget _buildDailySummary(BuildContext context, DashboardStats data) {
-    final profit = data.totalSales - data.totalExpenses - data.totalCommission;
-
     return Column(
       children: [
         Row(
@@ -192,21 +426,55 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             const SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
-                label: 'Expenses',
-                value: '₹${_formatAmount(data.totalExpenses)}',
-                icon: Icons.outbound,
-                color: AppColors.danger,
-                bgColor: AppColors.dangerLight,
+                label: 'Gross Profit',
+                value: '₹${_formatAmount(data.grossProfit)}',
+                icon: data.grossProfit >= 0 ? Icons.trending_up : Icons.trending_down,
+                color: data.grossProfit >= 0 ? AppColors.success : AppColors.danger,
+                bgColor: data.grossProfit >= 0 ? AppColors.successLight : const Color(0xFFFEF2F2),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
-                label: 'Profit',
-                value: '₹${_formatAmount(profit < 0 ? 0 : profit)}',
-                icon: Icons.trending_up,
-                color: AppColors.success,
-                bgColor: AppColors.successLight,
+                label: 'Tax Liability',
+                value: '₹${_formatAmount(data.netTaxLiability)}',
+                icon: data.netTaxLiability >= 0 ? Icons.account_balance : Icons.arrow_downward,
+                color: data.netTaxLiability >= 0 ? AppColors.info : AppColors.success,
+                bgColor: data.netTaxLiability >= 0 ? AppColors.infoLight : AppColors.successLight,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                label: 'Customers',
+                value: '${data.customerCount}',
+                icon: Icons.people,
+                color: AppColors.info,
+                bgColor: AppColors.infoLight,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MetricCard(
+                label: 'Staff',
+                value: '${data.staffCount}',
+                icon: Icons.badge,
+                color: AppColors.secondary,
+                bgColor: AppColors.secondarySurface,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MetricCard(
+                label: 'GST Collected',
+                value: '₹${_formatAmount(data.totalGstCollected)}',
+                icon: Icons.account_balance,
+                color: AppColors.warning,
+                bgColor: AppColors.warningLight,
               ),
             ),
           ],
@@ -286,6 +554,108 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                                   style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight)),
                               Text('₹${_formatAmount(data.totalGstCollected)}',
                                   style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+                            ],
+                          ),
+                        ],
+                        if (data.costOfGoodsSold > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Cost of Goods Sold',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight)),
+                              Text('₹${_formatAmount(data.costOfGoodsSold)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondaryLight)),
+                            ],
+                          ),
+                        ],
+                        if (data.totalDiscounts > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Discounts',
+                                  style: TextStyle(fontSize: 13, color: AppColors.danger)),
+                              Text('-₹${_formatAmount(data.totalDiscounts)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.danger)),
+                            ],
+                          ),
+                        ],
+                        if (data.totalExpenses > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Expenses',
+                                  style: TextStyle(fontSize: 13, color: AppColors.danger)),
+                              Text('₹${_formatAmount(data.totalExpenses)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.danger)),
+                            ],
+                          ),
+                        ],
+                        if (data.totalCommission > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Commission',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight)),
+                              Text('₹${_formatAmount(data.totalCommission)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondaryLight)),
+                            ],
+                          ),
+                        ],
+                        const Divider(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Net Profit before Tax',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                            Text('₹${_formatAmount(data.grossProfit - data.totalExpenses - data.totalCommission)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: (data.grossProfit - data.totalExpenses - data.totalCommission) >= 0
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                )),
+                          ],
+                        ),
+                        if (data.incomeTax > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Income Tax (estimated @ 10%)',
+                                  style: TextStyle(fontSize: 13, color: AppColors.warning)),
+                              Text('-₹${_formatAmount(data.incomeTax)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.warning)),
+                            ],
+                          ),
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Net Profit After Tax',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                              Text('₹${_formatAmount(data.grossProfit - data.totalExpenses - data.totalCommission - data.incomeTax)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: (data.grossProfit - data.totalExpenses - data.totalCommission - data.incomeTax) >= 0
+                                        ? AppColors.success
+                                        : AppColors.danger,
+                                  )),
+                            ],
+                          ),
+                        ],
+                        if (data.pendingPaymentAmount > 0) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${data.pendingPaymentCount} Pending Payments',
+                                  style: const TextStyle(fontSize: 13, color: AppColors.warning)),
+                              Text('₹${_formatAmount(data.pendingPaymentAmount)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.warning)),
                             ],
                           ),
                         ],
@@ -407,16 +777,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   }
 
   Widget _buildQuickActions(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            label: 'New Service',
-            icon: Icons.content_cut,
-            color: AppColors.primary,
-            onTap: () => context.push(AppRoutes.quickServiceEntry),
-          ),
+    final features = ref.watch(featureSettingsProvider);
+    final row1 = <Widget>[
+      Expanded(
+        child: _ActionButton(
+          label: 'New Sale',
+          icon: Icons.add_shopping_cart,
+          color: AppColors.primary,
+          onTap: () => context.push(AppRoutes.quickServiceEntry),
         ),
+      ),
+      if (features.showExpenses) ...[
         const SizedBox(width: 10),
         Expanded(
           child: _ActionButton(
@@ -426,15 +797,53 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             onTap: () => context.push(AppRoutes.addExpense),
           ),
         ),
+      ],
+      if (features.showItems) ...[
         const SizedBox(width: 10),
         Expanded(
           child: _ActionButton(
-            label: 'Manage Services',
+            label: 'Items',
             icon: Icons.inventory_2,
             color: AppColors.secondary,
             onTap: () => context.push(AppRoutes.serviceCatalog),
           ),
         ),
+      ],
+    ];
+    final row2 = <Widget>[
+      Expanded(
+        child: _ActionButton(
+          label: 'Customers',
+          icon: Icons.people,
+          color: AppColors.info,
+          onTap: () => context.push(AppRoutes.customers),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: _ActionButton(
+          label: 'Staff',
+          icon: Icons.badge,
+          color: AppColors.secondary,
+          onTap: () => context.push(AppRoutes.staff),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: _ActionButton(
+          label: 'GST',
+          icon: Icons.account_balance,
+          color: AppColors.warning,
+          onTap: () => context.push(AppRoutes.gst),
+        ),
+      ),
+    ];
+
+    return Column(
+      children: [
+        Row(children: row1),
+        const SizedBox(height: 10),
+        Row(children: row2),
       ],
     );
   }

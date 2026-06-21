@@ -338,6 +338,13 @@ class _InvoiceListPageState extends ConsumerState<InvoiceListPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if ((inv['discountPercent'] ?? 0).toDouble() > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Discount: ${(inv['discountPercent'] ?? 0).toDouble().toStringAsFixed(0)}%',
+                    style: const TextStyle(fontSize: 11, color: AppColors.danger),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,364 +1,162 @@
 // lib/core/services/voice_input_service.dart
 //
-// Voice recognition via native platform channel (RecognizerIntent on Android).
-// No third-party package needed — uses the device's built-in Google speech UI.
+// Voice input service (Android SpeechRecognizer via MethodChannel)
+// + VoiceInputProvider state management
+// + VoiceParser for extracting structured data from speech
 
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/chat_strings.dart' show HindiNLP;
+import '../../core/providers/language_provider.dart';
 
-// ─── Channel ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// MethodChannel service — wraps Android SpeechRecognizer
+// ═══════════════════════════════════════════════════════════════════
 
-const _channel = MethodChannel('com.gstsolution.gst_solution/voice');
+class VoiceInputService {
+  static const _channel = MethodChannel('gst_solution/voice_input');
+  static bool _isListening = false;
+  static bool get isListening => _isListening;
 
-// ─── Status ───────────────────────────────────────────────────────────────────
+  static Future<bool> isAvailable() async {
+    try {
+      return await _channel.invokeMethod<bool>('isAvailable') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
-enum VoiceStatus { idle, listening, done, unavailable, error }
+  static Future<void> startListening({
+    required Function(String text) onResult,
+    String locale = 'en-IN',
+  }) async {
+    if (_isListening) return;
+    _isListening = true;
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onResult') {
+        final text = call.arguments as String?;
+        if (text != null && text.isNotEmpty) onResult(text);
+      }
+    });
+    try {
+      final status = await _channel.invokeMethod<String>('startListening', {'locale': locale});
+      if (status != 'READY') _isListening = false;
+    } catch (_) {
+      _isListening = false;
+      rethrow;
+    }
+  }
 
-// ─── State ────────────────────────────────────────────────────────────────────
-
-class VoiceInputState {
-  final VoiceStatus status;
-  final String transcript;
-  final String? errorMessage;
-
-  const VoiceInputState({
-    this.status = VoiceStatus.idle,
-    this.transcript = '',
-    this.errorMessage,
-  });
-
-  bool get isListening => status == VoiceStatus.listening;
-  bool get isInitializing => false;
-  bool get hasError => status == VoiceStatus.error;
-  bool get isDone => status == VoiceStatus.done;
-  bool get isUnavailable => status == VoiceStatus.unavailable;
-
-  VoiceInputState copyWith({
-    VoiceStatus? status,
-    String? transcript,
-    String? errorMessage,
-  }) =>
-      VoiceInputState(
-        status: status ?? this.status,
-        transcript: transcript ?? this.transcript,
-        errorMessage: errorMessage,
-      );
+  static Future<void> stopListening() async {
+    if (!_isListening) return;
+    _isListening = false;
+    try {
+      await _channel.invokeMethod<void>('stopListening');
+    } catch (_) {}
+    _channel.setMethodCallHandler(null);
+  }
 }
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// Voice Input Provider — manages listening lifecycle + transcript
+// ═══════════════════════════════════════════════════════════════════
+
+class VoiceInputState {
+  final bool isListening;
+  final bool isInitializing;
+  final bool isDone;
+  final String transcript;
+
+  const VoiceInputState({
+    this.isListening = false,
+    this.isInitializing = false,
+    this.isDone = false,
+    this.transcript = '',
+  });
+
+  VoiceInputState copyWith({
+    bool? isListening,
+    bool? isInitializing,
+    bool? isDone,
+    String? transcript,
+  }) =>
+      VoiceInputState(
+        isListening: isListening ?? this.isListening,
+        isInitializing: isInitializing ?? this.isInitializing,
+        isDone: isDone ?? this.isDone,
+        transcript: transcript ?? this.transcript,
+      );
+}
 
 class VoiceInputNotifier extends StateNotifier<VoiceInputState> {
   VoiceInputNotifier() : super(const VoiceInputState());
 
-  Future<void> startListening({
-    String localeId = 'en_IN',
-    String prompt = 'Speak now...',
-    void Function(String transcript)? onPartial,
-    void Function(String transcript)? onFinal,
+  void startListening({
+    required String localeId,
+    String? prompt,
+    required Function(String) onFinal,
   }) async {
-    if (state.isListening) return;
-    state = const VoiceInputState(status: VoiceStatus.listening);
+    final available = await VoiceInputService.isAvailable();
+    if (!available) return;
+
+    state = state.copyWith(isInitializing: true);
+    await Future.delayed(const Duration(milliseconds: 300)); // show spinner briefly
+    state = state.copyWith(isInitializing: false, isListening: true, isDone: false, transcript: '');
 
     try {
-      final result = await _channel.invokeMethod<String>(
-        'startVoiceInput',
-        {'prompt': prompt},
+      await VoiceInputService.startListening(
+        locale: localeId,
+        onResult: (text) {
+          if (text.isNotEmpty) {
+            state = state.copyWith(transcript: text, isListening: false, isDone: true);
+            onFinal(text);
+          }
+        },
       );
-      final text = (result ?? '').trim();
-      state = VoiceInputState(status: VoiceStatus.done, transcript: text);
-      onFinal?.call(text);
-    } on PlatformException catch (e) {
-      state = VoiceInputState(
-        status: e.code == 'UNAVAILABLE'
-            ? VoiceStatus.unavailable
-            : VoiceStatus.error,
-        errorMessage: e.message,
-      );
-    } catch (e) {
-      state = VoiceInputState(
-          status: VoiceStatus.error, errorMessage: e.toString());
+    } catch (_) {
+      state = state.copyWith(isListening: false, isDone: true);
     }
   }
 
-  Future<void> stopListening() async {
-    if (state.isListening) state = state.copyWith(status: VoiceStatus.done);
+  void stopListening() {
+    VoiceInputService.stopListening();
+    state = state.copyWith(isListening: false, isDone: true);
   }
 
-  void reset() => state = const VoiceInputState();
-}
-
-// ─── Provider ──────────────────────────────────────────────────────────────────
-
-final voiceInputProvider =
-    StateNotifierProvider.autoDispose<VoiceInputNotifier, VoiceInputState>(
-  (ref) => VoiceInputNotifier(),
-);
-
-// ─── Voice Parsing Utils ──────────────────────────────────────────────────────
-
-class VoiceParser {
-  VoiceParser._();
-
-  static ParsedItem parseItem(String text) {
-    final lower = text.toLowerCase().trim();
-    double? price;
-    final pricePatterns = [
-      RegExp(r'(?:₹|rs\.?|rupees?)\s*([\d,]+(?:\.\d{1,2})?)'),
-      RegExp(r'(?:at|@|price\s*(?:is)?|worth)\s*([\d,]+(?:\.\d{1,2})?)'),
-      RegExp(r'([\d,]+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|rupees?)'),
-    ];
-    for (final p in pricePatterns) {
-      final m = p.firstMatch(lower);
-      if (m != null) {
-        price = double.tryParse(m.group(1)!.replaceAll(',', ''));
-        if (price != null) break;
-      }
-    }
-
-    double? gstRate;
-    final gstM = RegExp(r'(\d+)\s*(?:%|percent|gst)').firstMatch(lower);
-    if (gstM != null) {
-      final r = double.tryParse(gstM.group(1)!);
-      const valid = [0.0, 5.0, 12.0, 18.0, 28.0];
-      if (r != null && valid.contains(r)) gstRate = r;
-    }
-
-    String? unit;
-    final unitM = RegExp(
-            r'\b(kg|kgs|kilogram|litre|liter|ltr|pcs|piece|pieces|nos|units?|box|boxes|bag|bags|hour|hours|hr|hrs|meter|metres?|mtr|day|days|month|months)\b',
-            caseSensitive: false)
-        .firstMatch(lower);
-    if (unitM != null) unit = _normalizeUnit(unitM.group(1)!);
-
-    final isService = lower.contains('service') ||
-        lower.contains('consulting') ||
-        lower.contains('labour') ||
-        lower.contains('labor') ||
-        lower.contains('maintenance') ||
-        lower.contains('repair') ||
-        lower.contains('support');
-
-    String? hsnCode;
-    final hsnM =
-        RegExp(r'(?:hsn|sac|code)\s*[:\-]?\s*(\d{6,8})').firstMatch(lower);
-    if (hsnM != null) hsnCode = hsnM.group(1);
-
-    final name = _extractName(text, [
-      RegExp(r'\d+(?:\.\d+)?'),
-      RegExp(
-          r'\b(rupees?|rs\.?|percent|gst|at|per|unit|units?|kg|ltr|pcs|nos|box|bag|hr|meter|mtr|day|month|product|service|hsn|sac|code|price|is|worth|with|and|for)\b',
-          caseSensitive: false),
-    ]);
-
-    return ParsedItem(
-      name: name.isEmpty ? null : _capitalize(name),
-      price: price,
-      gstRate: gstRate,
-      unit: unit,
-      isService: isService,
-      hsnCode: hsnCode,
-    );
-  }
-
-  // Hindi field keywords supported:
-  //   फोन / मोबाइल / नंबर / संपर्क  → phone
-  //   ईमेल                           → email
-  //   जीएसटी                         → gstin
-  //   शहर                            → city
-  static const _phoneKeywords =
-      r'phone|mobile|mob|call|contact|number|no\.?|फोन|मोबाइल|नंबर|संपर्क';
-  static const _allFieldKeywords =
-      r'phone|mobile|mob|call|contact|email|mail|gstin|gst|city|pincode|'
-      r'address|pin|number|no\.|from|located|'
-      r'फोन|मोबाइल|नंबर|संपर्क|ईमेल|जीएसटी|शहर';
-
-  static ParsedCustomer parseCustomer(String text) {
-    final lower = text.toLowerCase().trim();
-
-    // ── Phone ── (English + Hindi keywords)
-    String? phone;
-    final phoneM = RegExp(
-      '(?:$_phoneKeywords)\\s*[:\\-]?\\s*(\\d[\\d\\s\\-]{8,13}\\d)',
-      caseSensitive: false,
-    ).firstMatch(lower);
-    if (phoneM != null) {
-      phone = phoneM.group(1)!.replaceAll(RegExp(r'[\s\-]'), '');
-      if (phone.length > 10) phone = phone.substring(phone.length - 10);
-    } else {
-      // Fallback: bare 10-digit number
-      phone = RegExp(r'\b(\d{10})\b').firstMatch(lower)?.group(1);
-    }
-
-    // ── Email ── (English + Hindi keyword)
-    String? email;
-    final emailM = RegExp(
-      r'(?:email|mail|e-mail|ईमेल)\s*[:\-]?\s*'
-      r'([a-z0-9._]+(?:\s+at\s+|\s*@\s*)(?:[a-z0-9]+(?:\s+dot\s+|\.)[a-z]{2,})+)',
-      caseSensitive: false,
-    ).firstMatch(lower);
-    if (emailM != null) {
-      email = emailM
-          .group(1)!
-          .replaceAll(' at ', '@')
-          .replaceAll(' dot ', '.')
-          .replaceAll(' ', '');
-    }
-
-    // ── GSTIN ── (English + Hindi keyword)
-    String? gstin;
-    final gstinM = RegExp(
-      r'(?:gstin|gst\s+(?:number|no\.?)?|जीएसटी)\s*[:\-]?\s*([A-Z0-9]{15})',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (gstinM != null) gstin = gstinM.group(1)!.toUpperCase();
-
-    // ── City ── (English + Hindi keyword)
-    String? city;
-    final cityM = RegExp(
-      r'(?:city|from|located\s+in|lives?\s+in|शहर)\s+([^\d\n]+?)'
-      r'(?=\s*(?:phone|mobile|email|gstin|gst|pincode|pin|फोन|मोबाइल|ईमेल|जीएसटी|\d{5,})|$)',
-      caseSensitive: false,
-    ).firstMatch(lower);
-    if (cityM != null) city = _smartCapitalize(cityM.group(1)!.trim());
-
-    // ── Pincode ──
-    final pincode = RegExp(r'\b(\d{6})\b').firstMatch(lower)?.group(1);
-
-    // ── Name: position-based extraction ──────────────────────────────────────
-    // Everything before the first recognised field keyword is the name.
-    // e.g. "राहुल शर्मा फोन 9876543210"  →  name = "राहुल शर्मा"
-    //      "Rahul Sharma phone 9876543210" →  name = "Rahul Sharma"
-    final kwMatch = RegExp(
-      _allFieldKeywords,
-      caseSensitive: false,
-    ).firstMatch(lower);
-
-    String name;
-    if (kwMatch != null) {
-      // Name = text before the keyword position (use original case)
-      name = text.substring(0, kwMatch.start).trim();
-      // Strip stray punctuation
-      name = name.replaceAll(RegExp(r'[,:;.!?@#\$%^&*()\[\]{}<>]'), '').trim();
-    } else {
-      // Fallback: strip digits and known English field words
-      name = _extractName(
-        text,
-        [
-          RegExp(
-            r'\b(phone|mobile|email|gstin|gst|city|pincode|address|pin|no\.?|number|from|located)\b',
-            caseSensitive: false,
-          ),
-          RegExp(r'\d+'),
-        ],
-        maxWords: 5,
-      );
-    }
-
-    return ParsedCustomer(
-      name: name.isEmpty ? null : _smartCapitalize(name),
-      phone: phone,
-      email: email,
-      gstin: gstin,
-      city: city,
-      pincode: pincode,
-    );
-  }
-
-  static String _extractName(String text, List<RegExp> excludePatterns,
-      {int maxWords = 6}) {
-    String cleaned = text;
-    for (final p in excludePatterns) {
-      cleaned = cleaned.replaceAll(p, ' ');
-    }
-    return cleaned
-        .split(RegExp(r'\s+'))
-        .map((w) => w.trim())
-        .where((w) => w.isNotEmpty && w.length > 1)
-        .take(maxWords)
-        .join(' ')
-        .trim();
-  }
-
-  /// Capitalises English words; leaves Devanagari/Hindi words unchanged
-  /// (they have no concept of case).
-  static String _smartCapitalize(String s) {
-    return s.split(' ').map((w) {
-      if (w.isEmpty) return '';
-      // Word contains at least one ASCII letter → treat as English
-      if (RegExp(r'[a-zA-Z]').hasMatch(w)) {
-        return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
-      }
-      // Hindi/Devanagari or other scripts — keep as-is
-      return w;
-    }).join(' ');
-  }
-
-  // Keep the old helper so nothing else breaks
-  static String _capitalize(String s) => _smartCapitalize(s);
-
-  static String _normalizeUnit(String raw) {
-    switch (raw.toLowerCase()) {
-      case 'kg':
-      case 'kgs':
-      case 'kilogram':
-        return 'Kg';
-      case 'litre':
-      case 'liter':
-      case 'ltr':
-        return 'Ltr';
-      case 'pcs':
-      case 'piece':
-      case 'pieces':
-        return 'Pcs';
-      case 'box':
-      case 'boxes':
-        return 'Box';
-      case 'bag':
-      case 'bags':
-        return 'Bag';
-      case 'hour':
-      case 'hours':
-      case 'hr':
-      case 'hrs':
-        return 'Hr';
-      case 'meter':
-      case 'metres':
-      case 'metre':
-      case 'mtr':
-        return 'Mtr';
-      case 'day':
-      case 'days':
-        return 'Day';
-      case 'month':
-      case 'months':
-        return 'Month';
-      default:
-        return 'Nos';
-    }
+  void reset() {
+    VoiceInputService.stopListening();
+    state = const VoiceInputState();
   }
 }
 
-// ─── Parsed Data Models ───────────────────────────────────────────────────────
+final voiceInputProvider = StateNotifierProvider<VoiceInputNotifier, VoiceInputState>((ref) {
+  return VoiceInputNotifier();
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Parsed Models
+// ═══════════════════════════════════════════════════════════════════
 
 class ParsedItem {
   final String? name;
   final double? price;
   final double? gstRate;
   final String? unit;
-  final bool isService;
   final String? hsnCode;
+  final bool isService;
 
-  const ParsedItem({
+  bool get hasAnyData =>
+      name != null || price != null || gstRate != null || unit != null;
+
+  ParsedItem({
     this.name,
     this.price,
     this.gstRate,
     this.unit,
-    this.isService = false,
     this.hsnCode,
+    this.isService = false,
   });
-
-  bool get hasAnyData =>
-      name != null || price != null || gstRate != null || unit != null;
 }
 
 class ParsedCustomer {
@@ -369,7 +167,9 @@ class ParsedCustomer {
   final String? city;
   final String? pincode;
 
-  const ParsedCustomer({
+  bool get hasAnyData => name != null || phone != null || email != null || gstin != null;
+
+  ParsedCustomer({
     this.name,
     this.phone,
     this.email,
@@ -377,12 +177,145 @@ class ParsedCustomer {
     this.city,
     this.pincode,
   });
+}
 
-  bool get hasAnyData =>
-      name != null ||
-      phone != null ||
-      email != null ||
-      gstin != null ||
-      city != null ||
-      pincode != null;
+// ═══════════════════════════════════════════════════════════════════
+// Voice Parser — extract structured data from transcribed text
+// ═══════════════════════════════════════════════════════════════════
+
+class VoiceParser {
+  VoiceParser._();
+
+  static ParsedItem? parseItem(String text) {
+    if (text.trim().isEmpty) return null;
+    final t = HindiNLP.convertDevanagariDigits(text.trim());
+
+    final lower = t.toLowerCase();
+
+    // Detect service keywords
+    final isService = lower.contains('service') ||
+        lower.contains('सेवा') ||
+        lower.contains('consult') ||
+        lower.contains('परामर्श') ||
+        lower.contains('design') ||
+        lower.contains('डिज़ाइन') ||
+        lower.contains('develop') ||
+        lower.contains('डेवलप');
+
+    // Extract GST rate
+    final gstRate = HindiNLP.extractGstRate(t);
+
+    // Extract price — find the first amount after a currency marker
+    double? price;
+    final pricePatterns = [
+      RegExp(r'(?:₹|rupees?|रु|rs\.?|रुपये|price|कीमत)\s*([\d,]+\.?\d*)', caseSensitive: false),
+      RegExp(r'(\d[\d,]*\.?\d*)\s*(?:₹|rupees?|रु|rs\.?|रुपये)', caseSensitive: false),
+    ];
+    for (final pat in pricePatterns) {
+      final m = pat.firstMatch(t);
+      if (m != null) {
+        price = double.tryParse(m.group(1)!.replaceAll(',', ''));
+        if (price != null) break;
+      }
+    }
+    // Fallback: last number in text (not GST)
+    if (price == null) {
+      final allNums = RegExp(r'([\d,]+\.?\d*)').allMatches(t.replaceAll(',', '')).toList();
+      if (allNums.length >= 2) {
+        // If we have GST, the other number is price
+        price = double.tryParse(allNums.last.group(1)!);
+        if (gstRate != null && allNums.length >= 3) {
+          price = double.tryParse(allNums[allNums.length - 2].group(1)!);
+        } else if (gstRate != null) {
+          price = double.tryParse(allNums.first.group(1)!);
+        }
+      } else if (allNums.isNotEmpty) {
+        price = double.tryParse(allNums.first.group(1)!);
+      }
+    }
+
+    // Extract unit
+    final unit = HindiNLP.extractUnit(t);
+
+    // Extract name — everything not a number/price/gst/unit
+    String? name;
+    final cleaned = t
+        .replaceAll(RegExp(r'₹|rupees?|रु|rs\.?|रुपये|प्रति|per|at|@', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[\d,]+\.?\d*\s*%?'), '')
+        .replaceAll(RegExp(r'(?:gst|जीएसटी|प्रतिशत|percent|फीसदी)\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'(?:किलो|लीटर|नग|पीस|nos|pcs|box|bag|kg|ltr|mtr|hrs?)\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.isNotEmpty && cleaned.length > 1) {
+      name = cleaned.split(' ').where((w) => w.length > 1).join(' ');
+      if (name.isEmpty) name = cleaned;
+    }
+
+    return ParsedItem(
+      name: name,
+      price: price,
+      gstRate: gstRate,
+      unit: unit ?? (name?.contains('service') == true || (name?.contains('consult') == true) ? 'Hr' : 'Pcs'),
+      isService: isService,
+    );
+  }
+
+  static ParsedCustomer? parseCustomer(String text) {
+    if (text.trim().isEmpty) return null;
+    final t = HindiNLP.convertDevanagariDigits(text.trim());
+    final lower = t.toLowerCase();
+
+    // Extract phone (10-digit)
+    String? phone;
+    final phoneM = RegExp(r'\b(\d{10})\b').firstMatch(t);
+    if (phoneM != null) phone = phoneM.group(1);
+
+    // Extract email
+    String? email;
+    final emailM = RegExp(r'[\w.+-]+@[\w-]+\.[\w.]+').firstMatch(t);
+    if (emailM != null) email = emailM.group(0);
+
+    // Extract GSTIN (15 chars: 2 digits + 10 chars + 3 digits)
+    String? gstin;
+    final gstinM = RegExp(r'\b(\d{2}[A-Za-z0-9]{10}\d{3})\b').firstMatch(t);
+    if (gstinM != null) gstin = gstinM.group(0)?.toUpperCase();
+
+    // Extract city / pincode
+    String? city;
+    final cityM = RegExp(r'(?:city|शहर|in|at)\s+([A-Za-z\u0900-\u097F\s]+?)(?:\s+\d|$)', caseSensitive: false).firstMatch(t);
+    if (cityM != null) city = cityM.group(1)?.trim();
+
+    String? pincode;
+    final pinM = RegExp(r'\b(\d{6})\b').firstMatch(t);
+    if (pinM != null) {
+      final pin = pinM.group(1)!;
+      // avoid confusing phone with pincode
+      if (phone == null || pin != phone) pincode = pin;
+    }
+
+    // Extract name — everything remaining
+    String? name;
+    var cleaned = t;
+    if (phone != null) cleaned = cleaned.replaceFirst(phone, '');
+    if (email != null) cleaned = cleaned.replaceFirst(email, '');
+    if (gstin != null) cleaned = cleaned.replaceFirst(gstin, '');
+    if (city != null) cleaned = cleaned.replaceFirst(city, '');
+    if (pincode != null) cleaned = cleaned.replaceFirst(pincode, '');
+    cleaned = cleaned
+        .replaceAll(RegExp(r'phone|फोन|मोबाइल|email|ईमेल|gstin|city|शहर|pincode|पिनकोड|in|at', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.isNotEmpty && cleaned.split(' ').any((w) => w.length > 1)) {
+      name = cleaned;
+    }
+
+    return ParsedCustomer(
+      name: name,
+      phone: phone,
+      email: email,
+      gstin: gstin,
+      city: city,
+      pincode: pincode,
+    );
+  }
 }

@@ -214,13 +214,13 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
         children: [
           Text('Bill To', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(invoice.customerName, style: Theme.of(context).textTheme.titleMedium),
+          Text(invoice.customerName, style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
           if (invoice.customerGstin != null) ...[
             const SizedBox(height: 4),
             Row(children: [
               const Icon(Icons.business, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Text('GSTIN: ${invoice.customerGstin}', style: Theme.of(context).textTheme.bodySmall),
+              Text('GSTIN: ${invoice.customerGstin}', style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
             ]),
           ],
           if (invoice.customerPhone != null) ...[
@@ -228,7 +228,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
             Row(children: [
               const Icon(Icons.phone_outlined, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Text(invoice.customerPhone!, style: Theme.of(context).textTheme.bodySmall),
+              Text(invoice.customerPhone!, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
             ]),
           ],
           if (invoice.customerAddress != null) ...[
@@ -236,7 +236,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
             Row(children: [
               const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textSecondaryLight),
               const SizedBox(width: 4),
-              Expanded(child: Text(invoice.customerAddress!, style: Theme.of(context).textTheme.bodySmall)),
+              Expanded(child: Text(invoice.customerAddress!, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
             ]),
           ],
           const SizedBox(height: 6),
@@ -271,7 +271,13 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
             child: Text('Services', style: Theme.of(context).textTheme.titleMedium),
           ),
           const Divider(height: 1),
-          ...invoice.lineItems.map((item) => _buildLineItem(context, item)),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: invoice.lineItems.length,
+            itemBuilder: (_, i) => _buildLineItem(context, invoice.lineItems[i]),
+          ),
         ],
       ),
     );
@@ -292,7 +298,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.description, style: Theme.of(context).textTheme.titleSmall),
+                        Text(item.description, style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis),
                         if (item.hsnSacCode != null)
                           Text('HSN/SAC: ${item.hsnSacCode}', style: Theme.of(context).textTheme.bodySmall),
                       ],
@@ -384,6 +390,7 @@ class _InvoiceDetailViewState extends ConsumerState<_InvoiceDetailView> {
           if (invoice.isInterState)
             _totalRow(context, 'IGST', invoice.totalIgst, color: AppColors.igstColor),
           if (invoice.totalCess > 0) _totalRow(context, 'Cess', invoice.totalCess),
+          if (invoice.discountAmount > 0) _totalRow(context, 'Discount', -invoice.discountAmount, color: AppColors.danger),
           const Divider(),
           if (invoice.roundOff != 0) _totalRow(context, 'Round Off', invoice.roundOff),
           const SizedBox(height: 4),

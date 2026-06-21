@@ -5,9 +5,14 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 
 import '../../../../core/storage/local_storage.dart';
+import '../../../../core/localization/app_strings.dart';
+import '../../../../core/providers/language_provider.dart';
 import '../../../customer/presentation/providers/customer_provider.dart';
 import '../../../staff/presentation/providers/staff_provider.dart';
 import '../../../purchase/presentation/providers/purchase_provider.dart';
+import '../../../settings/presentation/providers/feature_settings_provider.dart';
+import '../../../invoice/presentation/providers/item_catalog_provider.dart';
+import 'sale_settings_provider.dart';
 
 // ─── Chat Flow Step Enum ─────────────────────────────────────────────────────
 
@@ -35,6 +40,7 @@ enum ChatFlowStep {
   saleItemGst,
   saleMoreItems,
   salePaymentMode,
+  saleDiscount,
   saleConfirm,
   // Purchase
   purchaseSupplier,
@@ -128,6 +134,14 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
+  AppLanguage get _lang => _ref.read(appLanguageProvider);
+
+  SaleSettings get _saleSettings => _ref.read(saleSettingsProvider);
+
+  FeatureSettings get _featureSettings => _ref.read(featureSettingsProvider);
+
+  String _t(String en, String hi) => _lang == AppLanguage.hindi ? hi : en;
+
   void _addMessage(types.Message msg) {
     state = state.copyWith(messages: [msg, ...state.messages]);
   }
@@ -157,16 +171,13 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
   // ─── Main Menu ─────────────────────────────────────────────────────────────
 
   void _sendMainMenu() {
-    _addBotMessage(
-      '👋 Welcome! I can help you manage everything.\n\n'
-      'Choose an option below:',
-    );
+    _addBotMessage(AppStrings.welcome(_lang));
     _setStep(ChatFlowStep.mainMenu, options: [
-      '👤 Add Staff',
-      '👥 Add Customer',
-      '🧾 Create Sale',
-      '📦 Create Purchase',
-      '❓ Help',
+      AppStrings.menuAddStaff(_lang),
+      AppStrings.menuAddCustomer(_lang),
+      AppStrings.menuCreateSale(_lang),
+      AppStrings.menuCreatePurchase(_lang),
+      AppStrings.menuHelp(_lang),
     ]);
   }
 
@@ -220,6 +231,8 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       _handleSaleMoreItems(text);
     } else if (step == ChatFlowStep.salePaymentMode) {
       _handleSalePaymentMode(text);
+    } else if (step == ChatFlowStep.saleDiscount) {
+      _handleSaleDiscount(text);
     } else if (step == ChatFlowStep.saleConfirm) {
       _handleSaleConfirm(text);
     } else if (step == ChatFlowStep.purchaseSupplier) {
@@ -253,22 +266,15 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     } else if (text.contains('Purchase') || text.contains('purchase') || text.contains('📦')) {
       _startPurchaseFlow();
     } else if (text.contains('Help') || text.contains('help') || text.contains('❓')) {
-      _addBotMessage(
-        'I can help you with:\n\n'
-        '• **Add Staff** — Add a new staff member with commission\n'
-        '• **Add Customer** — Add a new customer with GST details\n'
-        '• **Create Sale** — Create a sale with items & quantities\n'
-        '• **Create Purchase** — Record a purchase from suppliers\n\n'
-        'Just tap any option above to get started!',
-      );
+      _addBotMessage(AppStrings.helpText(_lang));
       _setStep(ChatFlowStep.mainMenu, options: [
-        '👤 Add Staff',
-        '👥 Add Customer',
-        '🧾 Create Sale',
-        '📦 Create Purchase',
+        AppStrings.menuAddStaff(_lang),
+        AppStrings.menuAddCustomer(_lang),
+        AppStrings.menuCreateSale(_lang),
+        AppStrings.menuCreatePurchase(_lang),
       ]);
     } else {
-      _addBotMessage('Please choose from the options above ☝️');
+      _addBotMessage(AppStrings.chooseOption(_lang));
     }
   }
 
@@ -276,25 +282,25 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
   void _startStaffFlow() {
     state = state.copyWith(draft: {}, activeEntity: FlowEntity.staff);
-    _addBotMessage('Let\'s add a new staff member! ✨\n\nWhat is the staff name?');
+    _addBotMessage(AppStrings.staffWelcome(_lang));
     _setStep(ChatFlowStep.staffName);
   }
 
   void _handleStaffName(String text) {
     state = state.copyWith(draft: {...state.draft, 'name': text});
-    _addBotMessage('Great! What is **${text}**\'s phone number?');
+    _addBotMessage(AppStrings.staffPhone(text, _lang));
     _setStep(ChatFlowStep.staffPhone);
   }
 
   void _handleStaffPhone(String text) {
     state = state.copyWith(draft: {...state.draft, 'phone': text});
-    _addBotMessage('What is their role? (e.g., Salesperson, Technician, Accountant)');
+    _addBotMessage(AppStrings.staffRole(_lang));
     _setStep(ChatFlowStep.staffRole);
   }
 
   void _handleStaffRole(String text) {
     state = state.copyWith(draft: {...state.draft, 'role': text});
-    _addBotMessage('What commission percentage do they get? (e.g., 5)');
+    _addBotMessage(AppStrings.staffCommission(_lang));
     _setStep(ChatFlowStep.staffCommission);
   }
 
@@ -302,19 +308,12 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     final commission = double.tryParse(text) ?? 0;
     state = state.copyWith(draft: {...state.draft, 'commission': commission});
     final d = state.draft;
-    _addBotMessage(
-      '📋 **Confirm Staff Details:**\n\n'
-      'Name: **${d['name']}**\n'
-      'Phone: **${d['phone']}**\n'
-      'Role: **${d['role']}**\n'
-      'Commission: **${commission.toStringAsFixed(0)}%**\n\n'
-      'Save this staff member?',
-    );
-    _setStep(ChatFlowStep.staffConfirm, options: ['✅ Save', '❌ Cancel']);
+    _addBotMessage(AppStrings.staffConfirm(d['name'], d['phone'], d['role'], commission.toStringAsFixed(0), _lang));
+    _setStep(ChatFlowStep.staffConfirm, options: [AppStrings.save(_lang), AppStrings.cancel(_lang)]);
   }
 
   void _handleStaffConfirm(String text) {
-    if (text.contains('Save') || text.contains('✅')) {
+    if (text.contains('Save') || text.contains('✅') || text.contains('सहेजें')) {
       _botTyping(() async {
         final d = state.draft;
         await _ref.read(staffFormProvider.notifier).saveStaff(
@@ -323,11 +322,11 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
               role: d['role'] as String?,
               commissionPercentage: (d['commission'] as num?)?.toDouble(),
             );
-        _addBotMessage('✅ Staff **${d['name']}** has been added successfully!');
+        _addBotMessage(AppStrings.staffSaved(d['name'], _lang));
         _goBackToMenu();
       });
     } else {
-      _addBotMessage('Cancelled. Returning to menu...');
+      _addBotMessage(AppStrings.cancelled(_lang));
       _goBackToMenu();
     }
   }
@@ -336,20 +335,20 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
   void _startCustomerFlow() {
     state = state.copyWith(draft: {}, activeEntity: FlowEntity.customer);
-    _addBotMessage('Let\'s add a new customer! ✨\n\nWhat is the customer name?');
+    _addBotMessage(AppStrings.customerWelcome(_lang));
     _setStep(ChatFlowStep.customerName);
   }
 
   void _handleCustomerName(String text) {
     state = state.copyWith(draft: {...state.draft, 'name': text});
-    _addBotMessage('What is **${text}**\'s phone number?');
+    _addBotMessage(AppStrings.customerPhone(text, _lang));
     _setStep(ChatFlowStep.customerPhone);
   }
 
   void _handleCustomerPhone(String text) {
     state = state.copyWith(draft: {...state.draft, 'phone': text});
-    _addBotMessage('What is their GSTIN? (optional)');
-    _setStep(ChatFlowStep.customerGstin, options: ['⏭️ Skip GSTIN']);
+    _addBotMessage(AppStrings.customerGstin(_lang));
+    _setStep(ChatFlowStep.customerGstin, options: [AppStrings.skipGstin(_lang)]);
   }
 
   void _handleCustomerGstin(String text) {
@@ -358,14 +357,14 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     } else {
       state = state.copyWith(draft: {...state.draft, 'gstin': text});
     }
-    _addBotMessage('Which state are they in? (e.g., Maharashtra, Gujarat)');
+    _addBotMessage(AppStrings.customerState(_lang));
     _setStep(ChatFlowStep.customerState);
   }
 
   void _handleCustomerState(String text) {
     state = state.copyWith(draft: {...state.draft, 'state': text});
-    _addBotMessage('What is their address? (optional)');
-    _setStep(ChatFlowStep.customerAddress, options: ['⏭️ Skip Address']);
+    _addBotMessage(AppStrings.customerAddress(_lang));
+    _setStep(ChatFlowStep.customerAddress, options: [AppStrings.skipAddress(_lang)]);
   }
 
   void _handleCustomerAddress(String text) {
@@ -373,20 +372,19 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       state = state.copyWith(draft: {...state.draft, 'address': text});
     }
     final d = state.draft;
-    _addBotMessage(
-      '📋 **Confirm Customer Details:**\n\n'
-      'Name: **${d['name']}**\n'
-      'Phone: **${d['phone']}**\n'
-      'GSTIN: **${d['gstin']?.toString().isNotEmpty == true ? d['gstin'] : '—'}**\n'
-      'State: **${d['state']}**\n'
-      'Address: **${d['address']?.toString().isNotEmpty == true ? d['address'] : '—'}**\n\n'
-      'Save this customer?',
-    );
-    _setStep(ChatFlowStep.customerConfirm, options: ['✅ Save', '❌ Cancel']);
+    _addBotMessage(AppStrings.customerConfirm(
+      d['name'] ?? '',
+      d['phone']?.toString() ?? '',
+      d['gstin']?.toString().isNotEmpty == true ? d['gstin'].toString() : AppStrings.dash(_lang),
+      d['state'] ?? '',
+      d['address']?.toString().isNotEmpty == true ? d['address'].toString() : AppStrings.dash(_lang),
+      _lang,
+    ));
+    _setStep(ChatFlowStep.customerConfirm, options: [AppStrings.save(_lang), AppStrings.cancel(_lang)]);
   }
 
   void _handleCustomerConfirm(String text) {
-    if (text.contains('Save') || text.contains('✅')) {
+    if (text.contains('Save') || text.contains('✅') || text.contains('सहेजें')) {
       _botTyping(() async {
         final d = state.draft;
         await _ref.read(addCustomerProvider.notifier).addCustomer({
@@ -396,36 +394,65 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
           'stateName': d['state'],
           'address': d['address']?.toString().isNotEmpty == true ? d['address']?.toString() : null,
         });
-        _addBotMessage('✅ Customer **${d['name']}** has been added successfully!');
+        _addBotMessage(AppStrings.customerSaved(d['name'], _lang));
         _goBackToMenu();
       });
     } else {
-      _addBotMessage('Cancelled. Returning to menu...');
+      _addBotMessage(AppStrings.cancelled(_lang));
       _goBackToMenu();
+    }
+  }
+
+  /// Called by UI when barcode scanner returns a value.
+  void handleBarcodeResult(String barcode) {
+    final items = LocalStorage.itemCatalogBox.values.toList();
+    final matched = items.where((item) => item['barcode']?.toString() == barcode).firstOrNull;
+
+    if (matched != null) {
+      final price = (matched['unitPrice'] ?? 0).toDouble();
+      final gstRate = (matched['gstRate'] ?? 0).toDouble();
+      state = state.copyWith(
+        draft: {
+          ...state.draft,
+          '_currentItem': {'name': matched['name'], 'price': price, 'gstRate': gstRate, '_fromCatalog': true},
+          '_awaitingBarcode': false,
+        },
+      );
+      _addBotMessage(_t('📷 Scanned: ${matched['name']} (₹$price, GST: $gstRate%)', '📷 स्कैन किया: ${matched['name']} (₹$price, GST: $gstRate%)'));
+      _setStep(ChatFlowStep.saleItemQty);
+    } else {
+      _addBotMessage(_t('📷 Barcode not found in catalog. Type the item name:', '📷 बारकोड कैटलॉग में नहीं मिला। आइटम नाम टाइप करें:'));
+      _setStep(ChatFlowStep.saleItemName);
+      state = state.copyWith(draft: {...state.draft, '_awaitingBarcode': false});
     }
   }
 
   // ─── Sale Flow ─────────────────────────────────────────────────────────────
 
   void _startSaleFlow() {
+    final s = _saleSettings;
     state = state.copyWith(
       draft: {'items': <Map<String, dynamic>>[], 'paymentMode': 'cash'},
       activeEntity: FlowEntity.sale,
     );
-    _askSaleCustomer();
+    if (s.askCustomer && _featureSettings.showCustomers) {
+      _askSaleCustomer();
+    } else {
+      _askSaleStaff();
+    }
   }
 
   void _askSaleCustomer() {
     final customers = LocalStorage.customerBox.values.toList();
     final options = customers.map((c) => '👥 ${c['name']}').toList();
-    options.add('⏭️ Walk-in Customer');
-    _addBotMessage('Let\'s create a sale! 🧾\n\nSelect a customer (optional):');
+    options.add(AppStrings.walkinCustomer(_lang));
+    _addBotMessage(AppStrings.saleCustomerSelect(_lang));
     _setStep(ChatFlowStep.saleCustomerSelect, options: options);
   }
 
   void _handleSaleCustomerSelect(String text) {
-    if (text.contains('Skip') || text.contains('⏭️')) {
-      _addBotMessage('Walk-in Customer selected.');
+    if (text.contains('Skip') || text.contains('⏭️') || text.contains('वॉक-इन')) {
+      _addBotMessage(_t('Walk-in Customer selected.', 'वॉक-इन ग्राहक चुना गया।'));
     } else {
       final name = text.replaceFirst('👥 ', '').trim();
       final customers = LocalStorage.customerBox.values.toList();
@@ -439,30 +466,35 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
             'customerGstin': matched['gstin'],
           },
         );
-        _addBotMessage('Customer **${matched['name']}** selected!');
+        _addBotMessage(AppStrings.customerSelected(matched['name'], _lang));
       } else {
-        _addBotMessage('Customer not found. Using Walk-in.');
+        _addBotMessage(AppStrings.notFoundUsingWalkin(_lang));
       }
     }
     _askSaleStaff();
   }
 
   void _askSaleStaff() {
+    final s = _saleSettings;
+    if (!s.askStaff || !_featureSettings.showStaff) {
+      _askSaleItemName();
+      return;
+    }
     final staffList = LocalStorage.staffBox.values.toList();
     if (staffList.isEmpty) {
-      _addBotMessage('No staff members found. Proceeding without staff.');
+      _addBotMessage(AppStrings.noStaff(_lang));
       _askSaleItemName();
     } else {
       final options = staffList.map((s) => '👤 ${s['name']}').toList();
-      options.add('⏭️ Skip Staff');
-      _addBotMessage('Select a staff member (optional):');
+      options.add(AppStrings.skipStaff(_lang));
+      _addBotMessage(AppStrings.staffSelect(_lang));
       _setStep(ChatFlowStep.saleStaffSelect, options: options);
     }
   }
 
   void _handleSaleStaffSelect(String text) {
-    if (text.contains('Skip') || text.contains('⏭️')) {
-      _addBotMessage('Staff skipped.');
+    if (text.contains('Skip') || text.contains('⏭️') || text.contains('स्टाफ़')) {
+      _addBotMessage(AppStrings.staffSkipped(_lang));
     } else {
       final name = text.replaceFirst('👤 ', '').trim();
       final staffList = LocalStorage.staffBox.values.toList();
@@ -471,31 +503,40 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
         state = state.copyWith(
           draft: {...state.draft, 'staffId': matched['id'], 'staffName': matched['name']},
         );
-        _addBotMessage('Staff **${matched['name']}** selected!');
+        _addBotMessage(AppStrings.staffSelected(matched['name'], _lang));
       } else {
-        _addBotMessage('Staff skipped.');
+        _addBotMessage(AppStrings.staffSkipped(_lang));
       }
     }
     _askSaleItemName();
   }
 
   void _askSaleItemName() {
-    final items = LocalStorage.itemCatalogBox.values.toList();
-    if (items.isEmpty) {
-      _addBotMessage('What is the item name?');
+    final s = _saleSettings;
+    final items = s.enableCatalog ? LocalStorage.itemCatalogBox.values.toList() : [];
+    if (items.isEmpty && !s.enableBarcode) {
+      _addBotMessage(AppStrings.typeItemName(_lang));
       _setStep(ChatFlowStep.saleItemName);
     } else {
       final options = items.map((item) => '📦 ${item['name']}').toList();
-      options.add('➕ Other (type name)');
-      _addBotMessage('Select an item or add a new one:');
+      if (s.enableBarcode) {
+        options.add('📷 Scan Barcode');
+      }
+      options.add(AppStrings.otherItem(_lang));
+      _addBotMessage(AppStrings.itemSelect(_lang));
       _setStep(ChatFlowStep.saleItemName, options: options);
     }
   }
 
   void _handleSaleItemName(String text) {
     if (text.startsWith('➕')) {
-      _addBotMessage('Type the item name:');
+      _addBotMessage(AppStrings.typeItemName(_lang));
       _setStep(ChatFlowStep.saleItemName);
+    } else if (text == '📷 Scan Barcode') {
+      // Signal the UI to open scanner — the scanner result will call back with barcode value
+      _addBotMessage(_t('📷 Open the barcode scanner below.', '📷 नीचे बारकोड स्कैनर खोलें।'));
+      _setStep(ChatFlowStep.saleItemName);
+      state = state.copyWith(draft: {...state.draft, '_awaitingBarcode': true});
     } else if (text.startsWith('📦')) {
       final name = text.substring(2).trim();
       final items = LocalStorage.itemCatalogBox.values.toList();
@@ -509,23 +550,50 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
             '_currentItem': {'name': matched['name'], 'price': price, 'gstRate': gstRate, '_fromCatalog': true},
           },
         );
-        _addBotMessage('**${matched['name']}** selected (₹$price, GST: ${gstRate.toStringAsFixed(0)}%).\nQuantity? (e.g., 1, 2.5)');
+        _addBotMessage(AppStrings.itemSelected(matched['name'], price.toStringAsFixed(2), gstRate.toStringAsFixed(0), _lang));
         _setStep(ChatFlowStep.saleItemQty);
       } else {
-        _addBotMessage('Item not found. Type the name:');
+        _addBotMessage(AppStrings.itemNotFound(_lang));
         _setStep(ChatFlowStep.saleItemName);
       }
     } else {
-      state = state.copyWith(
-        draft: {...state.draft, '_currentItem': {'name': text}},
-      );
-      _addBotMessage('Quantity for **$text**? (e.g., 1, 2.5)');
-      _setStep(ChatFlowStep.saleItemQty);
+      final s = _saleSettings;
+      final itemName = text.trim();
+      if (!s.askQty && !s.askPrice && !s.askGst) {
+        // Add item immediately with defaults
+        final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+        items.add({
+          'name': itemName,
+          'qty': s.defaultQty,
+          'price': 0,
+          'gstRate': s.defaultGst,
+        });
+        state = state.copyWith(
+          draft: {...state.draft, 'items': items, '_currentItem': null, '_awaitingBarcode': false},
+        );
+        _addBotMessage(AppStrings.itemAdded(itemName, s.defaultQty.toStringAsFixed(0), '0', s.defaultGst.toStringAsFixed(0), _lang));
+        _setStep(ChatFlowStep.saleMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
+      } else {
+        state = state.copyWith(
+          draft: {...state.draft, '_currentItem': {'name': itemName}},
+        );
+        if (s.askQty) {
+          _addBotMessage(AppStrings.qtyPrompt(_lang));
+          _setStep(ChatFlowStep.saleItemQty);
+        } else if (s.askPrice) {
+          _addBotMessage(AppStrings.pricePrompt(_lang));
+          _setStep(ChatFlowStep.saleItemPrice);
+        } else {
+          _addBotMessage(AppStrings.gstPrompt(_lang));
+          _setStep(ChatFlowStep.saleItemGst, options: ['0%', '5%', '12%', '18%', '28%']);
+        }
+      }
     }
   }
 
   void _handleSaleItemQty(String text) {
-    final qty = double.tryParse(text) ?? 1;
+    final s = _saleSettings;
+    final qty = s.askQty ? (double.tryParse(text) ?? 1) : s.defaultQty;
     final currentItem = Map<String, dynamic>.from(state.draft['_currentItem'] as Map? ?? {});
     currentItem['qty'] = qty;
     if (currentItem['_fromCatalog'] == true) {
@@ -537,25 +605,72 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
         'gstRate': currentItem['gstRate'],
       });
       state = state.copyWith(draft: {...state.draft, 'items': items, '_currentItem': null});
-      _addBotMessage('✅ **${currentItem['name']}** added ($qty × ₹${currentItem['price']}, GST: ${currentItem['gstRate'].toStringAsFixed(0)}%)\n\nAdd more items?');
-      _setStep(ChatFlowStep.saleMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+      _addBotMessage(AppStrings.itemAdded(
+        currentItem['name'], qty.toString(), currentItem['price'].toStringAsFixed(2), currentItem['gstRate'].toStringAsFixed(0), _lang));
+      _setStep(ChatFlowStep.saleMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
     } else {
       state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
-      _addBotMessage('Unit price? (e.g., 500)');
-      _setStep(ChatFlowStep.saleItemPrice);
+      if (s.askPrice) {
+        _addBotMessage(AppStrings.pricePrompt(_lang));
+        _setStep(ChatFlowStep.saleItemPrice);
+      } else if (s.askGst) {
+        // default price = 0, ask gst
+        currentItem['price'] = 0;
+        state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
+        _addBotMessage(AppStrings.gstPrompt(_lang));
+        _setStep(ChatFlowStep.saleItemGst, options: ['0%', '5%', '12%', '18%', '28%']);
+      } else {
+        // no price, no gst — add item with defaults
+        final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+        items.add({
+          'name': currentItem['name'],
+          'qty': qty,
+          'price': 0,
+          'gstRate': s.defaultGst,
+        });
+        state = state.copyWith(draft: {...state.draft, 'items': items, '_currentItem': null});
+        _addBotMessage(AppStrings.itemAdded(
+          currentItem['name'], qty.toStringAsFixed(0), '0', s.defaultGst.toStringAsFixed(0), _lang));
+        _setStep(ChatFlowStep.saleMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
+      }
     }
   }
 
   void _handleSaleItemPrice(String text) {
+    final s = _saleSettings;
+    if (!s.askPrice) {
+      // Should not normally be called; skip handling
+      return;
+    }
     final price = double.tryParse(text) ?? 0;
     state = state.copyWith(
       draft: {...state.draft, '_currentItem': {...(state.draft['_currentItem'] as Map<String, dynamic>? ?? {}), 'price': price}},
     );
-    _addBotMessage('GST rate? (0, 5, 12, 18, 28)');
-    _setStep(ChatFlowStep.saleItemGst, options: ['0%', '5%', '12%', '18%', '28%']);
+    if (s.askGst) {
+      _addBotMessage(AppStrings.gstPrompt(_lang));
+      _setStep(ChatFlowStep.saleItemGst, options: ['0%', '5%', '12%', '18%', '28%']);
+    } else {
+      // Skip GST — add item with default gst
+      final currentItem = (state.draft['_currentItem'] as Map<String, dynamic>? ?? {});
+      final items = List<Map<String, dynamic>>.from(state.draft['items'] as List? ?? []);
+      items.add({
+        'name': currentItem['name'],
+        'qty': currentItem['qty'] ?? s.defaultQty,
+        'price': price,
+        'gstRate': s.defaultGst,
+      });
+      state = state.copyWith(
+        draft: {...state.draft, 'items': items, '_currentItem': null},
+      );
+      _addBotMessage(AppStrings.itemAdded(
+        currentItem['name'], currentItem['qty']?.toString() ?? '1', price.toStringAsFixed(2), s.defaultGst.toStringAsFixed(0), _lang));
+      _setStep(ChatFlowStep.saleMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
+    }
   }
 
   void _handleSaleItemGst(String text) {
+    final s = _saleSettings;
+    if (!s.askGst) return;
     final gstStr = text.replaceAll('%', '');
     final gst = double.tryParse(gstStr) ?? 0;
     final currentItem = (state.draft['_currentItem'] as Map<String, dynamic>? ?? {});
@@ -569,15 +684,13 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     state = state.copyWith(
       draft: {...state.draft, 'items': items, '_currentItem': null},
     );
-    _addBotMessage(
-      '✅ **${currentItem['name']}** added (${currentItem['qty']} × ₹${currentItem['price']}, GST: ${gst.toStringAsFixed(0)}%)\n\n'
-      'Add more items?',
-    );
-    _setStep(ChatFlowStep.saleMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+    _addBotMessage(AppStrings.itemAdded(
+      currentItem['name'], currentItem['qty'].toString(), currentItem['price'].toStringAsFixed(2), gst.toStringAsFixed(0), _lang));
+    _setStep(ChatFlowStep.saleMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
   }
 
   void _handleSaleMoreItems(String text) {
-    if (text.contains('Add') || text.contains('✅')) {
+    if (text.contains('Add') || text.contains('✅') || text.contains('जोड़ें')) {
       _askSaleItemName();
     } else {
       _showSaleSummary();
@@ -590,31 +703,43 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     final totalGst = items.fold(0.0, (s, i) => s + ((i['qty'] as num) * (i['price'] as num) * (i['gstRate'] as num) / 100));
     final grandTotal = subTotal + totalGst;
 
-    _addBotMessage(
-      '📋 **Sale Summary**\n\n'
-      '${items.asMap().entries.map((e) => '${e.key + 1}. **${e.value['name']}** — ${e.value['qty']} × ₹${e.value['price']}').join('\n')}'
-      '\n\nSubtotal: **₹${subTotal.toStringAsFixed(2)}**'
-      '\nGST: **₹${totalGst.toStringAsFixed(2)}**'
-      '\n**Grand Total: ₹${grandTotal.toStringAsFixed(2)}**'
-      '\n\nSelect payment mode:',
-    );
-    _setStep(ChatFlowStep.salePaymentMode, options: ['💵 Cash', '💳 Card', '📱 UPI', '🏦 Bank']);
+    final itemLines = items.asMap().entries.map((e) => '${e.key + 1}. **${e.value['name']}** — ${e.value['qty']} × ₹${e.value['price']}').join('\n');
+    _addBotMessage(AppStrings.saleSummary(itemLines, subTotal.toStringAsFixed(2), totalGst.toStringAsFixed(2), grandTotal.toStringAsFixed(2), _lang));
+    _setStep(ChatFlowStep.salePaymentMode, options: [AppStrings.cash(_lang), AppStrings.card(_lang), AppStrings.upi(_lang), AppStrings.bank(_lang)]);
   }
 
   void _handleSalePaymentMode(String text) {
+    final s = _saleSettings;
     String mode;
-    if (text.contains('Cash') || text.contains('💵')) mode = 'cash';
-    else if (text.contains('Card') || text.contains('💳')) mode = 'card';
+    if (text.contains('Cash') || text.contains('💵') || text.contains('नकद')) mode = 'cash';
+    else if (text.contains('Card') || text.contains('💳') || text.contains('कार्ड')) mode = 'card';
     else if (text.contains('UPI') || text.contains('📱')) mode = 'upi';
     else mode = 'bank';
 
     state = state.copyWith(draft: {...state.draft, 'paymentMode': mode});
-    _addBotMessage('Payment mode: **${mode.toUpperCase()}**\n\nSave this sale?');
-    _setStep(ChatFlowStep.saleConfirm, options: ['✅ Save Sale', '❌ Cancel']);
+    _addBotMessage(_t('Payment mode: **${mode.toUpperCase()}**', 'भुगतान विधि: **${mode.toUpperCase()}**'));
+    if (s.askDiscount) {
+      _addBotMessage(_t('Enter discount percentage (default: ${s.defaultDiscount.toStringAsFixed(0)}%):', 'डिस्काउंट प्रतिशत दर्ज करें (डिफ़ॉल्ट: ${s.defaultDiscount.toStringAsFixed(0)}%):'));
+      _setStep(ChatFlowStep.saleDiscount, options: ['${s.defaultDiscount.toStringAsFixed(0)}%', '0%', '5%', '10%', '15%', '20%']);
+    } else {
+      state = state.copyWith(draft: {...state.draft, 'discount': s.defaultDiscount});
+      _addBotMessage(AppStrings.saveOrCancel(_lang));
+      _setStep(ChatFlowStep.saleConfirm, options: [AppStrings.saveSale(_lang), AppStrings.cancel(_lang)]);
+    }
+  }
+
+  void _handleSaleDiscount(String text) {
+    final s = _saleSettings;
+    final discountStr = text.replaceAll('%', '');
+    final discount = double.tryParse(discountStr) ?? s.defaultDiscount;
+    state = state.copyWith(draft: {...state.draft, 'discount': discount});
+    _addBotMessage(_t('Discount: **${discount.toStringAsFixed(0)}%**', 'डिस्काउंट: **${discount.toStringAsFixed(0)}%**'));
+    _addBotMessage(AppStrings.saveOrCancel(_lang));
+    _setStep(ChatFlowStep.saleConfirm, options: [AppStrings.saveSale(_lang), AppStrings.cancel(_lang)]);
   }
 
   void _handleSaleConfirm(String text) {
-    if (text.contains('Save') || text.contains('✅')) {
+    if (text.contains('Save') || text.contains('✅') || text.contains('सहेजें')) {
       _botTyping(() async {
         final d = state.draft;
         final items = (d['items'] as List<Map<String, dynamic>>? ?? []);
@@ -633,6 +758,9 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
 
         final subTotal = lineItems.fold(0.0, (s, i) => s + (i['taxableAmount'] as double));
         final totalTax = lineItems.fold(0.0, (s, i) => s + (i['taxableAmount'] as double) * (i['gstRate'] as double) / 100);
+        final discountPercent = (d['discount'] as num?)?.toDouble() ?? 0;
+                final discountAmount = subTotal * discountPercent / 100;
+        final grandTotal = subTotal + totalTax - discountAmount;
 
         final invoice = {
           'id': id,
@@ -645,24 +773,35 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
           'lineItems': lineItems,
           'subTotal': subTotal,
           'totalTax': totalTax,
-          'grandTotal': subTotal + totalTax,
+          'discountPercent': discountPercent,
+          'discountAmount': discountAmount,
+          'grandTotal': grandTotal,
           'paymentMode': d['paymentMode'] ?? 'cash',
+          'paymentStatus': 'paid',
           'status': 'completed',
           if (d['staffId'] != null) 'staffId': d['staffId'],
           if (d['staffName'] != null) 'staffName': d['staffName'],
         };
 
         await LocalStorage.cacheInvoice(id, invoice);
-        _addBotMessage(
-          '✅ **Sale created successfully!** 🎉\n\n'
-          'Invoice: **$invoiceNum**\n'
-          'Total: **₹${(subTotal + totalTax).toStringAsFixed(2)}**\n'
-          'Payment: **${d['paymentMode']}**',
-        );
+
+        // Reduce stock for sold items
+        final catalog = _ref.read(itemCatalogProvider.notifier);
+        for (final i in items) {
+          final name = i['name']?.toString() ?? '';
+          final qty = (i['qty'] as num?)?.toDouble() ?? 0;
+          if (name.isEmpty || qty == 0) continue;
+          final match = catalog.findByName(name);
+          if (match != null && !match.isService) {
+            await catalog.adjustStock(match.id, -qty);
+          }
+        }
+
+        _addBotMessage(AppStrings.saleSaved(invoiceNum, grandTotal.toStringAsFixed(2), d['paymentMode'], _lang));
         _goBackToMenu();
       });
     } else {
-      _addBotMessage('Cancelled. Returning to menu...');
+      _addBotMessage(AppStrings.cancelled(_lang));
       _goBackToMenu();
     }
   }
@@ -674,7 +813,7 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       draft: {'items': <Map<String, dynamic>>[]},
       activeEntity: FlowEntity.purchase,
     );
-    _addBotMessage('Let\'s record a purchase! 📦\n\nWhat is the supplier name?');
+    _addBotMessage(AppStrings.purchaseSupplier(_lang));
     _setStep(ChatFlowStep.purchaseSupplier);
   }
 
@@ -686,19 +825,19 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
   void _askPurchaseItemName() {
     final items = LocalStorage.itemCatalogBox.values.toList();
     if (items.isEmpty) {
-      _addBotMessage('What is the item name?');
+      _addBotMessage(AppStrings.typeItemName(_lang));
       _setStep(ChatFlowStep.purchaseItemName);
     } else {
       final options = items.map((item) => '📦 ${item['name']}').toList();
-      options.add('➕ Other (type name)');
-      _addBotMessage('Select an item or add a new one:');
+      options.add(AppStrings.otherItem(_lang));
+      _addBotMessage(AppStrings.itemSelect(_lang));
       _setStep(ChatFlowStep.purchaseItemName, options: options);
     }
   }
 
   void _handlePurchaseItemName(String text) {
     if (text.startsWith('➕')) {
-      _addBotMessage('Type the item name:');
+      _addBotMessage(AppStrings.typeItemName(_lang));
       _setStep(ChatFlowStep.purchaseItemName);
     } else if (text.startsWith('📦')) {
       final name = text.substring(2).trim();
@@ -713,17 +852,17 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
             '_currentItem': {'name': matched['name'], 'price': price, 'gstRate': gstRate, '_fromCatalog': true},
           },
         );
-        _addBotMessage('**${matched['name']}** selected (₹$price, GST: ${gstRate.toStringAsFixed(0)}%).\nQuantity? (e.g., 10, 25)');
+        _addBotMessage(AppStrings.itemSelected(matched['name'], price.toStringAsFixed(2), gstRate.toStringAsFixed(0), _lang));
         _setStep(ChatFlowStep.purchaseItemQty);
       } else {
-        _addBotMessage('Item not found. Type the name:');
+        _addBotMessage(AppStrings.itemNotFound(_lang));
         _setStep(ChatFlowStep.purchaseItemName);
       }
     } else {
       state = state.copyWith(
         draft: {...state.draft, '_currentItem': {'name': text}},
       );
-      _addBotMessage('Quantity for **$text**? (e.g., 10, 25)');
+      _addBotMessage(AppStrings.qtyPromptPurchase(_lang));
       _setStep(ChatFlowStep.purchaseItemQty);
     }
   }
@@ -741,11 +880,12 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
         'gstRate': currentItem['gstRate'],
       });
       state = state.copyWith(draft: {...state.draft, 'items': items, '_currentItem': null});
-      _addBotMessage('✅ **${currentItem['name']}** added ($qty × ₹${currentItem['price']}, GST: ${currentItem['gstRate'].toStringAsFixed(0)}%)\n\nAdd more items?');
-      _setStep(ChatFlowStep.purchaseMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+      _addBotMessage(AppStrings.itemAdded(
+        currentItem['name'], qty.toString(), currentItem['price'].toStringAsFixed(2), currentItem['gstRate'].toStringAsFixed(0), _lang));
+      _setStep(ChatFlowStep.purchaseMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
     } else {
-      state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
-      _addBotMessage('Unit price? (e.g., 100)');
+    state = state.copyWith(draft: {...state.draft, '_currentItem': currentItem});
+      _addBotMessage(AppStrings.pricePromptPurchase(_lang));
       _setStep(ChatFlowStep.purchaseItemPrice);
     }
   }
@@ -755,7 +895,7 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     state = state.copyWith(
       draft: {...state.draft, '_currentItem': {...(state.draft['_currentItem'] as Map<String, dynamic>? ?? {}), 'price': price}},
     );
-    _addBotMessage('GST rate? (0, 5, 12, 18, 28)');
+    _addBotMessage(AppStrings.gstPrompt(_lang));
     _setStep(ChatFlowStep.purchaseItemGst, options: ['0%', '5%', '12%', '18%', '28%']);
   }
 
@@ -773,15 +913,13 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     state = state.copyWith(
       draft: {...state.draft, 'items': items, '_currentItem': null},
     );
-    _addBotMessage(
-      '✅ **${currentItem['name']}** added (${currentItem['qty']} × ₹${currentItem['price']}, GST: ${gst.toStringAsFixed(0)}%)\n\n'
-      'Add more items?',
-    );
-    _setStep(ChatFlowStep.purchaseMoreItems, options: ['✅ Add More', '📋 Done — Review']);
+    _addBotMessage(AppStrings.itemAdded(
+      currentItem['name'], currentItem['qty'].toString(), currentItem['price'].toStringAsFixed(2), gst.toStringAsFixed(0), _lang));
+    _setStep(ChatFlowStep.purchaseMoreItems, options: [AppStrings.addMore(_lang), AppStrings.doneReview(_lang)]);
   }
 
   void _handlePurchaseMoreItems(String text) {
-    if (text.contains('Add') || text.contains('✅')) {
+    if (text.contains('Add') || text.contains('✅') || text.contains('जोड़ें')) {
       _askPurchaseItemName();
     } else {
       _showPurchaseSummary();
@@ -794,20 +932,14 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     final totalGst = items.fold(0.0, (s, i) => s + ((i['qty'] as num) * (i['price'] as num) * (i['gstRate'] as num) / 100));
     final grandTotal = subTotal + totalGst;
 
-    _addBotMessage(
-      '📋 **Purchase Summary**\n\n'
-      'Supplier: **${state.draft['supplier']}**\n'
-      '${items.asMap().entries.map((e) => '${e.key + 1}. **${e.value['name']}** — ${e.value['qty']} × ₹${e.value['price']}').join('\n')}'
-      '\n\nSubtotal: **₹${subTotal.toStringAsFixed(2)}**'
-      '\nGST: **₹${totalGst.toStringAsFixed(2)}**'
-      '\n**Grand Total: ₹${grandTotal.toStringAsFixed(2)}**'
-      '\n\nSave this purchase?',
-    );
-    _setStep(ChatFlowStep.purchaseConfirm, options: ['✅ Save Purchase', '❌ Cancel']);
+    final itemLines = items.asMap().entries.map((e) => '${e.key + 1}. **${e.value['name']}** — ${e.value['qty']} × ₹${e.value['price']}').join('\n');
+    _addBotMessage(AppStrings.purchaseSummary(
+      state.draft['supplier'], itemLines, subTotal.toStringAsFixed(2), totalGst.toStringAsFixed(2), grandTotal.toStringAsFixed(2), _lang));
+    _setStep(ChatFlowStep.purchaseConfirm, options: [AppStrings.savePurchase(_lang), AppStrings.cancel(_lang)]);
   }
 
   void _handlePurchaseConfirm(String text) {
-    if (text.contains('Save') || text.contains('✅')) {
+    if (text.contains('Save') || text.contains('✅') || text.contains('सहेजें')) {
       _botTyping(() async {
         final d = state.draft;
         await _ref.read(createPurchaseProvider.notifier).createPurchase({
@@ -816,11 +948,11 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
           'invoiceDate': DateTime.now().toIso8601String(),
           'status': 'completed',
         });
-        _addBotMessage('✅ Purchase from **${d['supplier']}** has been recorded successfully!');
+        _addBotMessage(AppStrings.purchaseSaved(d['supplier'], _lang));
         _goBackToMenu();
       });
     } else {
-      _addBotMessage('Cancelled. Returning to menu...');
+      _addBotMessage(AppStrings.cancelled(_lang));
       _goBackToMenu();
     }
   }
@@ -832,7 +964,7 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     if (index < 0 || index >= items.length) return;
     final removed = items.removeAt(index);
     state = state.copyWith(draft: {...state.draft, 'items': items});
-    _addBotMessage('Removed **${removed['name']}** from the list.');
+    _addBotMessage(AppStrings.removedItem(removed['name'], _lang));
   }
 
   void updateItem(int index, {double? qty, double? price, double? gstRate}) {
@@ -844,7 +976,7 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
     if (gstRate != null) item['gstRate'] = gstRate;
     items[index] = item;
     state = state.copyWith(draft: {...state.draft, 'items': items});
-    _addBotMessage('Updated **${item['name']}**: qty ${item['qty']}, ₹${item['price']}, GST ${item['gstRate']}%');
+    _addBotMessage(AppStrings.updatedItem(item['name'], item['qty'].toString(), item['price'].toStringAsFixed(2), item['gstRate'].toStringAsFixed(0), _lang));
   }
 
   // ─── Back to Menu ──────────────────────────────────────────────────────────
@@ -856,10 +988,10 @@ class ChatFlowNotifier extends StateNotifier<ChatFlowState> {
       activeEntity: null,
     );
     _setStep(ChatFlowStep.mainMenu, options: [
-      '👤 Add Staff',
-      '👥 Add Customer',
-      '🧾 Create Sale',
-      '📦 Create Purchase',
+      AppStrings.menuAddStaff(_lang),
+      AppStrings.menuAddCustomer(_lang),
+      AppStrings.menuCreateSale(_lang),
+      AppStrings.menuCreatePurchase(_lang),
     ]);
   }
 

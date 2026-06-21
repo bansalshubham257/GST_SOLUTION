@@ -5,14 +5,72 @@ import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/providers/language_provider.dart';
+import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/barcode_scanner_sheet.dart';
 import '../providers/chat_flow_provider.dart';
 
-class ChatFlowPage extends ConsumerWidget {
+class ChatFlowPage extends ConsumerStatefulWidget {
   const ChatFlowPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatFlowPage> createState() => _ChatFlowPageState();
+}
+
+class _ChatFlowPageState extends ConsumerState<ChatFlowPage> {
+  bool _isListening = false;
+  final _textController = TextEditingController();
+  final _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startListening() async {
+    final available = await VoiceInputService.isAvailable();
+    if (!available) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Speech recognition not available')),
+        );
+      }
+      return;
+    }
+    final lang = ref.read(appLanguageProvider);
+    setState(() => _isListening = true);
+    try {
+      await VoiceInputService.startListening(
+        locale: lang.locale,
+        onResult: (text) {
+          if (text.isNotEmpty && mounted) {
+            VoiceInputService.stopListening();
+            setState(() => _isListening = false);
+            ref.read(chatFlowProvider.notifier).handleInput(text);
+          }
+        },
+      );
+    } catch (e) {
+      setState(() => _isListening = false);
+      if (mounted) {
+        final msg = e.toString().contains('PERMISSION_DENIED')
+            ? 'Microphone permission needed for voice input'
+            : 'Voice input failed';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    }
+  }
+
+  void _stopListening() {
+    VoiceInputService.stopListening();
+    setState(() => _isListening = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final chatState = ref.watch(chatFlowProvider);
     final items = chatState.activeEntity != null &&
             (chatState.activeEntity == FlowEntity.sale ||
@@ -87,12 +145,123 @@ class ChatFlowPage extends ConsumerWidget {
                         ? [const types.User(id: 'chatflow-bot', firstName: '')]
                         : [],
               ),
+              customBottomWidget: const SizedBox.shrink(),
             ),
           ),
+          _buildCustomInput(ref),
           if (items.isNotEmpty) _buildCart(items, ref, context),
           if (chatState.quickReplyOptions.isNotEmpty)
             _buildQuickReplies(chatState, ref),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCustomInput(WidgetRef ref) {
+    final isListening = _isListening;
+    final awaitingBarcode = ref.watch(chatFlowProvider.select((s) => s.draft['_awaitingBarcode'] as bool? ?? false));
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8, right: 8, top: 4, bottom: 4),
+          child: Row(
+            children: [
+              if (awaitingBarcode)
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 20),
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(AppColors.primarySurface),
+                      shape: WidgetStatePropertyAll(const CircleBorder()),
+                    ),
+                    onPressed: () {
+                      BarcodeScannerSheet.show(context, onDetected: (value, format) {
+                        if (mounted) {
+                          ref.read(chatFlowProvider.notifier).handleBarcodeResult(value);
+                        }
+                      });
+                    },
+                  ),
+                ),
+              if (!awaitingBarcode)
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    icon: Icon(
+                      isListening ? Icons.mic : Icons.mic_none,
+                      color: isListening ? Colors.white : AppColors.primary,
+                      size: 20,
+                    ),
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(
+                        isListening ? Colors.red.shade600 : AppColors.primarySurface,
+                      ),
+                      shape: WidgetStatePropertyAll(const CircleBorder()),
+                    ),
+                    onPressed: () {
+                      if (isListening) {
+                        _stopListening();
+                      } else {
+                        _startListening();
+                      }
+                    },
+                  ),
+                ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  focusNode: _focusNode,
+                  textInputAction: TextInputAction.send,
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    isDense: true,
+                  ),
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty) {
+                      ref.read(chatFlowProvider.notifier).handleInput(value.trim());
+                      _textController.clear();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 4),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    final text = _textController.text.trim();
+                    if (text.isNotEmpty) {
+                      ref.read(chatFlowProvider.notifier).handleInput(text);
+                      _textController.clear();
+                    }
+                  },
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

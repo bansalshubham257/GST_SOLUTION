@@ -51,11 +51,27 @@ class ApiClient {
 
   ApiClient(this._dio);
 
+  /// Throws a [DioException] if no auth token is stored (local-only plan).
+  /// Pass [forceSync]=true to skip this check (e.g. for login/signup).
+  Future<void> _checkSync({bool forceSync = false}) async {
+    if (forceSync) return;
+    final token = await SecureStorage.read(AppConstants.tokenKey);
+    if (token == null || token.isEmpty) {
+      throw DioException(
+        type: DioExceptionType.connectionError,
+        message: 'API calls disabled on local-only plan',
+        requestOptions: RequestOptions(path: ''),
+      );
+    }
+  }
+
   Future<Response<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
     Options? options,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.get<T>(
       path,
       queryParameters: queryParameters,
@@ -68,7 +84,9 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.post<T>(
       path,
       data: data,
@@ -82,7 +100,9 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.put<T>(
       path,
       data: data,
@@ -96,7 +116,9 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.patch<T>(
       path,
       data: data,
@@ -110,7 +132,9 @@ class ApiClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.delete<T>(
       path,
       data: data,
@@ -123,7 +147,9 @@ class ApiClient {
     String path,
     FormData formData, {
     ProgressCallback? onSendProgress,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.post(
       path,
       data: formData,
@@ -136,7 +162,9 @@ class ApiClient {
     String path,
     String savePath, {
     ProgressCallback? onReceiveProgress,
+    bool forceSync = false,
   }) async {
+    await _checkSync(forceSync: forceSync);
     return await _dio.download(
       path,
       savePath,
@@ -144,4 +172,3 @@ class ApiClient {
     );
   }
 }
-

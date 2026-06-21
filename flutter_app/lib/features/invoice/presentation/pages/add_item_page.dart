@@ -10,6 +10,7 @@ import '../../../../core/utils/plan_limits.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../core/widgets/barcode_scanner_sheet.dart';
+import '../../../../core/widgets/barcode_generator.dart';
 import '../../../../core/services/voice_input_service.dart';
 import '../../../../core/widgets/voice_mic_button.dart';
 import '../../../../core/widgets/language_toggle_button.dart'; // LanguageToggleButton + VoiceLanguageRow
@@ -17,6 +18,7 @@ import '../../../../core/providers/language_provider.dart';
 import '../../../../core/utils/chat_strings.dart';
 import '../../data/models/item_catalog_entry.dart';
 import '../providers/item_catalog_provider.dart';
+import '../providers/item_settings_provider.dart';
 
 class AddItemPage extends ConsumerStatefulWidget {
   final ItemCatalogEntry? editItem;
@@ -30,8 +32,14 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _purchasePriceController = TextEditingController();
   final _hsnController = TextEditingController();
   final _barcodeController = TextEditingController();
+  final _stockController = TextEditingController();
+  final _lowStockController = TextEditingController();
+  DateTime? _manufacturingDate;
+  DateTime? _expiryDate;
+  DateTime? _bestBeforeDate;
 
   double _gstRate = 18;
   String _unit = 'Nos';
@@ -48,11 +56,21 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
       final item = widget.editItem!;
       _nameController.text = item.name;
       _priceController.text = item.unitPrice.toStringAsFixed(2);
+      _purchasePriceController.text = item.purchasePrice != null
+          ? item.purchasePrice!.toStringAsFixed(2)
+          : '';
       _hsnController.text = item.hsnCode ?? '';
       _barcodeController.text = item.barcode ?? '';
+      _stockController.text = item.stock > 0 ? item.stock.toStringAsFixed(0) : '';
+      _lowStockController.text = item.lowStockThreshold != null
+          ? item.lowStockThreshold!.toStringAsFixed(0)
+          : '';
       _gstRate = item.gstRate;
       _unit = item.unit;
       _isService = item.isService;
+      _manufacturingDate = item.manufacturingDate;
+      _expiryDate = item.expiryDate;
+      _bestBeforeDate = item.bestBeforeDate;
     }
   }
 
@@ -60,8 +78,11 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _purchasePriceController.dispose();
     _hsnController.dispose();
     _barcodeController.dispose();
+    _stockController.dispose();
+    _lowStockController.dispose();
     super.dispose();
   }
 
@@ -100,6 +121,8 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
 
   @override
   Widget build(BuildContext context) {
+    final itemSettings = ref.watch(itemSettingsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Service' : 'Add Service'),
@@ -174,6 +197,16 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
                   ),
                 ],
               ),
+              if (itemSettings.showPurchasePrice) ...[
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'Purchase Price (optional)',
+                  hint: '0.00',
+                  controller: _purchasePriceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  prefix: const Icon(Icons.shopping_cart_outlined, size: 20),
+                ),
+              ],
               const SizedBox(height: 16),
 
               // GST Rate
@@ -196,17 +229,36 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
                 hint: 'Scan or enter EAN/UPC barcode',
                 controller: _barcodeController,
                 prefix: const Icon(Icons.qr_code_outlined, size: 20),
-                suffix: IconButton(
-                  icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
-                  tooltip: 'Scan barcode',
-                  onPressed: () => BarcodeScannerSheet.show(
-                    context,
-                    onDetected: (value, _) => setState(() => _barcodeController.text = value),
-                    hint: 'Scan the item barcode / QR code',
-                  ),
+                suffix: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.auto_fix_high, color: AppColors.primary, size: 20),
+                      tooltip: 'Generate barcode',
+                      onPressed: () {
+                        final numericId = DateTime.now().millisecondsSinceEpoch % 100000;
+                        setState(() {
+                          _barcodeController.text = BarcodeGeneratorUtil.generateEan13(numericId);
+                        });
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+                      tooltip: 'Scan barcode',
+                      onPressed: () => BarcodeScannerSheet.show(
+                        context,
+                        onDetected: (value, _) => setState(() => _barcodeController.text = value),
+                        hint: 'Scan the item barcode / QR code',
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 28),
+
+              // Stock Management
+              _buildStockSection(itemSettings),
+              const SizedBox(height: 16),
 
               // Preview Card
               _buildPreviewCard(),
@@ -365,6 +417,111 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
     );
   }
 
+  Widget _buildStockSection(ItemSettings itemSettings) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inventory, size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text('Stock & Alerts',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (itemSettings.showStock)
+            AppTextField(
+              label: 'Current Stock',
+              hint: '0 = untracked',
+              controller: _stockController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              prefix: const Icon(Icons.warehouse_outlined, size: 20),
+            ),
+          if (itemSettings.showStock && itemSettings.showLowStockAlert)
+            const SizedBox(height: 12),
+          if (itemSettings.showLowStockAlert)
+            AppTextField(
+              label: 'Low Stock Alert at',
+              hint: 'Leave empty for no alert',
+              controller: _lowStockController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              prefix: const Icon(Icons.notifications_outlined, size: 20),
+            ),
+          if (itemSettings.showManufacturingDate ||
+              itemSettings.showExpiryDate ||
+              itemSettings.showBestBeforeDate) ...[
+            const Divider(height: 20),
+            const Text('Dates',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 8),
+          ],
+          if (itemSettings.showManufacturingDate) ...[
+            _buildDateField('Manufacturing Date', Icons.calendar_today, _manufacturingDate, (d) {
+              setState(() => _manufacturingDate = d);
+            }),
+            const SizedBox(height: 8),
+          ],
+          if (itemSettings.showExpiryDate) ...[
+            _buildDateField('Expiry Date', Icons.event, _expiryDate, (d) {
+              setState(() => _expiryDate = d);
+            }),
+            const SizedBox(height: 8),
+          ],
+          if (itemSettings.showBestBeforeDate) ...[
+            _buildDateField('Best Before Date', Icons.date_range, _bestBeforeDate, (d) {
+              setState(() => _bestBeforeDate = d);
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateField(String label, IconData icon, DateTime? value, ValueChanged<DateTime?> onChanged) {
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: value ?? DateTime.now(),
+          firstDate: DateTime(2000),
+          lastDate: DateTime(2100),
+        );
+        if (picked != null) onChanged(picked);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20),
+          suffixIcon: value != null
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 16),
+                  onPressed: () => onChanged(null),
+                )
+              : null,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Text(
+          value != null
+              ? '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}'
+              : 'Tap to select',
+          style: TextStyle(
+            fontSize: 14,
+            color: value != null ? AppColors.textPrimaryLight : AppColors.textTertiaryLight,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPreviewCard() {
     final price = double.tryParse(_priceController.text) ?? 0;
     final gstAmt = price * _gstRate / 100;
@@ -461,30 +618,47 @@ class _AddItemPageState extends ConsumerState<AddItemPage> {
 
     final name = _nameController.text.trim();
     final price = double.tryParse(_priceController.text) ?? 0;
+    final purchasePrice = double.tryParse(_purchasePriceController.text);
+    final usePurchasePrice = purchasePrice != null && purchasePrice > 0;
     final hsnCode = _hsnController.text.trim().isEmpty ? null : _hsnController.text.trim();
     final barcode = _barcodeController.text.trim().isEmpty ? null : _barcodeController.text.trim();
+    final stock = double.tryParse(_stockController.text) ?? 0;
+    final lowStockThreshold = double.tryParse(_lowStockController.text);
+    final useLowStockAlert = lowStockThreshold != null && lowStockThreshold > 0;
 
     try {
       if (_isEditMode) {
         final updated = widget.editItem!.copyWith(
           name: name,
           unitPrice: price,
+          purchasePrice: usePurchasePrice ? purchasePrice : null,
           gstRate: _gstRate,
           unit: _unit,
           hsnCode: hsnCode,
           isService: _isService,
           barcode: barcode,
+          stock: stock,
+          lowStockThreshold: useLowStockAlert ? lowStockThreshold : null,
+          manufacturingDate: _manufacturingDate,
+          expiryDate: _expiryDate,
+          bestBeforeDate: _bestBeforeDate,
         );
         await ref.read(itemCatalogProvider.notifier).updateItem(updated);
       } else {
         await ref.read(itemCatalogProvider.notifier).addItem(
           name: name,
           unitPrice: price,
+          purchasePrice: usePurchasePrice ? purchasePrice : null,
           gstRate: _gstRate,
           unit: _unit,
           hsnCode: hsnCode,
           isService: _isService,
           barcode: barcode,
+          stock: stock,
+          lowStockThreshold: useLowStockAlert ? lowStockThreshold : null,
+          manufacturingDate: _manufacturingDate,
+          expiryDate: _expiryDate,
+          bestBeforeDate: _bestBeforeDate,
         );
       }
 

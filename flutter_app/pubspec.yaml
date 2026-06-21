@@ -71,6 +71,9 @@ dependencies:
   json_annotation: ^4.9.0
   freezed_annotation: ^2.4.1
 
+  # Ads
+  google_mobile_ads: ^5.1.0
+
   # Chat
   flutter_chat_ui: ^1.6.13
   flutter_chat_types: ^3.6.2
@@ -86,6 +89,8 @@ dependencies:
   # QR / Barcode scanning & generation
   mobile_scanner: ^6.0.2
   qr_flutter: ^4.1.0
+  barcode: ^2.2.9
+  barcode_widget: ^2.0.4
 
 dev_dependencies:
   flutter_test:

@@ -27,9 +27,9 @@ class UserEntity extends Equatable {
     this.isBusinessSetupDone = false,
     this.businessId,
     this.plan = 'free',
-    this.maxStaff = 999,
-    this.maxServices = 999,
-    this.maxSales = 999,
+    this.maxStaff = 999999999,
+    this.maxServices = 999999999,
+    this.maxSales = 999999999,
     required this.createdAt,
   });
 
@@ -41,6 +41,9 @@ class UserEntity extends Equatable {
 
   /// Whether this user has unlimited records (no plan limits).
   bool get isUnlimited => plan == 'local_paid' || plan == 'db_paid';
+
+  /// Whether to show ads. Free (local-only) users see ads; paid users don't.
+  bool get showAds => plan == 'free';
 
   UserEntity copyWith({
     String? id,

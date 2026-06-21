@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/storage/local_storage.dart';
+import '../../../../core/storage/secure_storage.dart';
 
 class GstMonthlySummary {
   final DateTime month;
@@ -86,6 +88,11 @@ class GstSlabSummaryData {
 }
 
 final gstMonthlySummaryProvider = FutureProvider.family<GstMonthlySummary, DateTime>((ref, month) async {
+  // For local plans, skip API calls entirely — compute from cache
+  final token = await SecureStorage.read(AppConstants.tokenKey);
+  if (token == null) {
+    return computeGstSummaryFromCache(month);
+  }
   try {
     final apiClient = ref.read(apiClientProvider);
     final response = await apiClient.get(
@@ -94,7 +101,11 @@ final gstMonthlySummaryProvider = FutureProvider.family<GstMonthlySummary, DateT
         'month': '${month.year}-${month.month.toString().padLeft(2, '0')}',
       },
     );
-    return GstMonthlySummary.fromJson(response.data as Map<String, dynamic>);
+    final apiSummary = GstMonthlySummary.fromJson(response.data as Map<String, dynamic>);
+    if (apiSummary.invoiceCount > 0 || apiSummary.totalTaxable > 0) {
+      return apiSummary;
+    }
+    return computeGstSummaryFromCache(month);
   } catch (e) {
     return computeGstSummaryFromCache(month);
   }
@@ -125,7 +136,7 @@ GstMonthlySummary computeGstSummaryFromCache(DateTime month) {
     totalCgst += (inv['totalCgst'] ?? 0).toDouble();
     totalSgst += (inv['totalSgst'] ?? 0).toDouble();
     totalIgst += (inv['totalIgst'] ?? 0).toDouble();
-    totalTaxable += (inv['subTotal'] ?? 0).toDouble();
+    totalTaxable += (inv['subTotal'] ?? inv['grandTotal'] ?? 0).toDouble();
     count++;
 
     // Aggregate by GST slab
@@ -282,7 +293,7 @@ Gstr1Data computeGstr1FromCache(DateTime month) {
     }
 
     final invoiceValue = (inv['grandTotal'] ?? 0).toDouble();
-    final taxable = (inv['subTotal'] ?? 0).toDouble();
+    final taxable = (inv['subTotal'] ?? inv['grandTotal'] ?? 0).toDouble();
     final cgst = (inv['totalCgst'] ?? 0).toDouble();
     final sgst = (inv['totalSgst'] ?? 0).toDouble();
     final igst = (inv['totalIgst'] ?? 0).toDouble();

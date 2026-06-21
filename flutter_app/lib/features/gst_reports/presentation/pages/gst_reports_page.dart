@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/ad_banner_widget.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../providers/gst_reports_provider.dart';
 
@@ -66,6 +67,8 @@ class _GstReportsPageState extends ConsumerState<GstReportsPage> {
               Text('Quick Reports', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _buildReportCards(context),
+              const SizedBox(height: 16),
+              AdBannerWidget(),
               const SizedBox(height: 80),
             ],
           ),
@@ -228,14 +231,21 @@ class _GstReportsPageState extends ConsumerState<GstReportsPage> {
         subtitle: 'Complete invoice-wise report',
         icon: Icons.table_chart_outlined,
         color: AppColors.accent,
-        onTap: () {},
+        onTap: () => context.push(AppRoutes.salesRegister),
+      ),
+      _ReportCard(
+        title: 'Purchase Register',
+        subtitle: 'Supplier-wise purchase report',
+        icon: Icons.shopping_cart_outlined,
+        color: AppColors.danger,
+        onTap: () => context.push(AppRoutes.purchaseRegister),
       ),
       _ReportCard(
         title: 'Tax Liability',
         subtitle: 'CGST/SGST/IGST payable',
         icon: Icons.account_balance_outlined,
         color: AppColors.info,
-        onTap: () {},
+        onTap: () => context.push(AppRoutes.taxLiability),
       ),
     ];
 

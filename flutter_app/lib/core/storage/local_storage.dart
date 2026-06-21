@@ -182,10 +182,31 @@ class LocalStorage {
   }
 
   // User preferences
+  static Future<void> saveUserData(Map<String, dynamic> data) async {
+    for (final entry in data.entries) {
+      if (entry.value != null) {
+        await userBox.put(entry.key, entry.value);
+      }
+    }
+  }
+
+  static Map<String, dynamic> getUserData() {
+    final map = <String, dynamic>{};
+    for (final key in userBox.keys) {
+      map[key.toString()] = userBox.get(key);
+    }
+    return map;
+  }
   static Future<void> setThemeMode(String mode) async {
     await settingsBox.put('themeMode', mode);
   }
 
   static String getThemeMode() => settingsBox.get('themeMode', defaultValue: 'light') as String;
+
+  static Future<void> setLanguage(String locale) async {
+    await settingsBox.put('appLanguage', locale);
+  }
+
+  static String getLanguage() => settingsBox.get('appLanguage', defaultValue: 'en-IN') as String;
 }
 

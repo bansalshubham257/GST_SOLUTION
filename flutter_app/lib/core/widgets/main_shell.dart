@@ -4,11 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
 import '../router/app_router.dart';
+import '../localization/app_strings.dart';
+import '../providers/language_provider.dart';
 import '../../features/dashboard/presentation/providers/dashboard_provider.dart';
 import '../../features/staff/presentation/providers/staff_provider.dart';
 import '../../features/invoice/presentation/providers/invoice_provider.dart';
 import '../../features/purchase/presentation/providers/purchase_provider.dart';
 import '../../features/customer/presentation/providers/customer_provider.dart';
+import '../../features/settings/presentation/providers/feature_settings_provider.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -19,58 +22,6 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  void _showFabOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: AppColors.primarySurface,
-                  child: Icon(Icons.add_rounded, color: AppColors.primary)),
-              title: const Text('Quick Sale',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Create a sale in few taps'),
-              onTap: () {
-                Navigator.pop(context);
-                context.push(AppRoutes.quickServiceEntry);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: AppColors.accentSurface,
-                  child: Icon(Icons.smart_toy_outlined,
-                      color: AppColors.accentDark)),
-              title: const Text('Chat Assistant',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Create staff, customers, sales by chat'),
-              onTap: () {
-                Navigator.pop(context);
-                context.push(AppRoutes.chatFlow);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +30,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         children: [
           widget.navigationShell,
           Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
+            top: MediaQuery.of(context).padding.top + kToolbarHeight + 4,
             right: 12,
             child: Material(
               elevation: 3,
@@ -98,7 +49,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showFabOptions(context),
+        onPressed: () => context.push(AppRoutes.quickServiceEntry),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 6,
@@ -106,28 +57,35 @@ class _MainShellState extends ConsumerState<MainShell> {
         child: const Icon(Icons.add_rounded, size: 32),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: _BottomNavBar(
-        currentIndex: widget.navigationShell.currentIndex,
-        onTap: (index) {
-          if (index == 0) {
-            ref.invalidate(dashboardStatsProvider);
-            ref.invalidate(recentInvoicesProvider);
-          }
-          if (index == 1) {
-            ref.invalidate(staffListProvider);
-          }
-          if (index == 2) {
-            ref.invalidate(purchaseListProvider);
-          }
-          if (index == 3) {
-            ref.invalidate(customerListProvider);
-          }
-          if (index == 4) {
-            ref.invalidate(invoiceListProvider);
-          }
-          widget.navigationShell.goBranch(
-            index,
-            initialLocation: index == widget.navigationShell.currentIndex,
+      bottomNavigationBar: Consumer(
+        builder: (context, ref, child) {
+          final features = ref.watch(featureSettingsProvider);
+          return _BottomNavBar(
+            currentIndex: widget.navigationShell.currentIndex,
+            lang: ref.read(appLanguageProvider),
+            features: features,
+            onTap: (index) {
+              if (index == 0) {
+                ref.invalidate(dashboardStatsProvider);
+                ref.invalidate(recentInvoicesProvider);
+              }
+              if (index == 1) {
+                ref.invalidate(staffListProvider);
+              }
+              if (index == 2) {
+                ref.invalidate(purchaseListProvider);
+              }
+              if (index == 3) {
+                ref.invalidate(customerListProvider);
+              }
+              if (index == 4) {
+                ref.invalidate(invoiceListProvider);
+              }
+              widget.navigationShell.goBranch(
+                index,
+                initialLocation: index == widget.navigationShell.currentIndex,
+              );
+            },
           );
         },
       ),
@@ -137,11 +95,79 @@ class _MainShellState extends ConsumerState<MainShell> {
 
 class _BottomNavBar extends StatelessWidget {
   final int currentIndex;
+  final AppLanguage lang;
+  final FeatureSettings features;
   final ValueChanged<int> onTap;
-  const _BottomNavBar({required this.currentIndex, required this.onTap});
+  const _BottomNavBar({
+    required this.currentIndex,
+    required this.lang,
+    required this.features,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Build all visible nav items in order with their fixed branch indices
+    final allItems = <_NavItem>[
+      _NavItem(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+        label: AppStrings.navDashboard(lang),
+        isActive: currentIndex == 0,
+        onTap: () => onTap(0),
+      ),
+      if (features.showStaff)
+        _NavItem(
+          icon: Icons.people_outline,
+          activeIcon: Icons.people,
+          label: AppStrings.navStaff(lang),
+          isActive: currentIndex == 1,
+          onTap: () => onTap(1),
+        ),
+      if (features.showPurchases)
+        _NavItem(
+          icon: Icons.shopping_cart_outlined,
+          activeIcon: Icons.shopping_cart,
+          label: AppStrings.navPurchase(lang),
+          isActive: currentIndex == 2,
+          onTap: () => onTap(2),
+        ),
+      if (features.showCustomers)
+        _NavItem(
+          icon: Icons.people_outline,
+          activeIcon: Icons.people,
+          label: AppStrings.navCustomers(lang),
+          isActive: currentIndex == 3,
+          onTap: () => onTap(3),
+        ),
+      if (features.showItems)
+        _NavItem(
+          icon: Icons.inventory_2_outlined,
+          activeIcon: Icons.inventory_2,
+          label: AppStrings.navServices(lang),
+          isActive: currentIndex == 4,
+          onTap: () => onTap(4),
+        ),
+      if (features.showGstReports)
+        _NavItem(
+          icon: Icons.receipt_long_outlined,
+          activeIcon: Icons.receipt_long,
+          label: AppStrings.navGst(lang),
+          isActive: currentIndex == 5,
+          onTap: () => onTap(5),
+        ),
+    ];
+
+    if (allItems.isEmpty) return const SizedBox.shrink();
+
+    // Insert spacer between left and right halves
+    final mid = (allItems.length + 1) ~/ 2;
+    final children = <Widget>[
+      ...allItems.sublist(0, mid).map((e) => Expanded(child: e)),
+      const SizedBox(width: 56),
+      ...allItems.sublist(mid).map((e) => Expanded(child: e)),
+    ];
+
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).bottomNavigationBarTheme.backgroundColor,
@@ -156,61 +182,14 @@ class _BottomNavBar extends StatelessWidget {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.dashboard_outlined,
-                activeIcon: Icons.dashboard,
-                label: 'Dashboard',
-                isActive: currentIndex == 0,
-                onTap: () => onTap(0),
-              ),
-              _NavItem(
-                icon: Icons.people_outline,
-                activeIcon: Icons.people,
-                label: 'Staff',
-                isActive: currentIndex == 1,
-                onTap: () => onTap(1),
-              ),
-              _NavItem(
-                icon: Icons.shopping_cart_outlined,
-                activeIcon: Icons.shopping_cart,
-                label: 'Purchase',
-                isActive: currentIndex == 2,
-                onTap: () => onTap(2),
-              ),
-              const SizedBox(width: 56),
-              _NavItem(
-                icon: Icons.people_outline,
-                activeIcon: Icons.people,
-                label: 'Customers',
-                isActive: currentIndex == 3,
-                onTap: () => onTap(3),
-              ),
-              _NavItem(
-                icon: Icons.inventory_2_outlined,
-                activeIcon: Icons.inventory_2,
-                label: 'Services',
-                isActive: currentIndex == 4,
-                onTap: () => onTap(4),
-              ),
-              _NavItem(
-                icon: Icons.receipt_long_outlined,
-                activeIcon: Icons.receipt_long,
-                label: 'GST',
-                isActive: currentIndex == 5,
-                onTap: () => onTap(5),
-              ),
-            ],
-          ),
+          child: Row(children: children),
         ),
       ),
     );
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _NavItem extends ConsumerWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -226,7 +205,7 @@ class _NavItem extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final color = isActive ? AppColors.primary : AppColors.textTertiaryLight;
     return InkWell(
       onTap: onTap,

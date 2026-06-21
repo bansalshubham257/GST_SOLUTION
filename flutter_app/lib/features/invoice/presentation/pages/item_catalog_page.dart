@@ -8,6 +8,8 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/widgets/barcode_scanner_sheet.dart';
+import '../../../../core/widgets/barcode_generator.dart';
+import '../../../../core/services/barcode_print_service.dart';
 import '../../data/models/item_catalog_entry.dart';
 import '../providers/item_catalog_provider.dart';
 
@@ -43,6 +45,11 @@ class _ItemCatalogPageState extends ConsumerState<ItemCatalogPage> {
       appBar: AppBar(
         title: const Text('Manage'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.print, size: 22),
+            tooltip: 'Generate Barcodes',
+            onPressed: () => _showPrintSheet(),
+          ),
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'expenses') context.push(AppRoutes.expenses);
@@ -113,6 +120,7 @@ class _ItemCatalogPageState extends ConsumerState<ItemCatalogPage> {
                     item: filtered[i],
                     onEdit: () => context.push(AppRoutes.editServiceItem, extra: filtered[i]),
                     onDelete: () => _confirmDelete(filtered[i]),
+                    onGenerateBarcode: () => _generateBarcode(filtered[i]),
                   ),
                 ),
       floatingActionButton: FloatingActionButton.extended(
@@ -123,6 +131,26 @@ class _ItemCatalogPageState extends ConsumerState<ItemCatalogPage> {
             icon: const Icon(Icons.add_rounded, size: 22),
             label: const Text('Add Service', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
+    );
+  }
+
+  void _generateBarcode(ItemCatalogEntry item) {
+    if (item.barcode != null && item.barcode!.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${item.name} already has a barcode'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    final numericId = int.tryParse(item.id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final barcodeValue = BarcodeGeneratorUtil.generateEan13(numericId);
+    final updated = item.copyWith(barcode: barcodeValue);
+    ref.read(itemCatalogProvider.notifier).updateItem(updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Barcode generated for ${item.name}'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -161,19 +189,230 @@ class _ItemCatalogPageState extends ConsumerState<ItemCatalogPage> {
     );
   }
 
+  void _showPrintSheet() {
+    final items = ref.read(itemCatalogProvider);
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    final quantities = <String, int>{for (final i in items) i.id: 0};
+    final statusMessages = <String, String>{};
+    var searchQuery = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final filtered = searchQuery.isEmpty
+              ? items
+              : items.where((i) =>
+                  i.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
+                  (i.hsnCode ?? '').toLowerCase().contains(searchQuery.toLowerCase())).toList();
+
+          return Container(
+          height: MediaQuery.of(ctx).size.height * 0.8,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Generate Barcodes',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.print, size: 16),
+                          label: const Text('Print', style: TextStyle(fontSize: 13)),
+                          onPressed: () {
+                            final toPrint = <(String name, String code, int copies)>[];
+                            for (final item in items) {
+                              final qty = quantities[item.id] ?? 0;
+                              if (qty <= 0) continue;
+                              if (item.barcode == null || item.barcode!.isEmpty) {
+                                statusMessages[item.id] = 'No barcode assigned';
+                                continue;
+                              }
+                              toPrint.add((item.name, item.barcode!, qty));
+                            }
+                            if (toPrint.isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Selected items have no barcode. Tap "Generate" first.'), behavior: SnackBarBehavior.floating),
+                              );
+                              return;
+                            }
+                            Navigator.pop(ctx);
+                            BarcodePrintService.printLabels(toPrint);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search items...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => setSheetState(() => searchQuery = ''),
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  onChanged: (v) => setSheetState(() => searchQuery = v),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.auto_fix_high, size: 18),
+                    label: const Text('Generate Barcodes for Selected Items'),
+                    onPressed: () async {
+                      final notifier = ref.read(itemCatalogProvider.notifier);
+                      var generated = 0;
+                      for (final item in items) {
+                        final qty = quantities[item.id] ?? 0;
+                        if (qty <= 0) continue;
+                        if (item.barcode != null && item.barcode!.isNotEmpty) {
+                          statusMessages[item.id] = '✓ Already has barcode';
+                          continue;
+                        }
+                        final numericId = int.tryParse(item.id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                        final barcode = BarcodeGeneratorUtil.generateEan13(numericId);
+                        final updated = item.copyWith(barcode: barcode);
+                        await notifier.updateItem(updated);
+                        statusMessages[item.id] = '✓ $barcode';
+                        generated++;
+                      }
+                      setSheetState(() {});
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(
+                          content: Text(generated > 0 ? '$generated barcodes generated!' : 'No new barcodes needed'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              Expanded(
+                child: filtered.isEmpty
+                    ? const Center(child: Text('No items match search', style: TextStyle(color: AppColors.textSecondaryLight)))
+                    : ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final item = filtered[i];
+                    final qty = quantities[item.id] ?? 0;
+                    final barcode = item.barcode ?? '-';
+                    final status = statusMessages[item.id] ?? (item.barcode != null && item.barcode!.isNotEmpty ? '✓ $barcode' : '⚠ No barcode');
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: qty > 0 ? AppColors.primary : AppColors.borderLight,
+                        radius: 18,
+                        child: Text('${qty}',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: qty > 0 ? Colors.white : AppColors.textTertiaryLight)),
+                      ),
+                      title: Text(item.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text(status,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: item.barcode != null && item.barcode!.isNotEmpty
+                                  ? AppColors.textSecondaryLight
+                                  : AppColors.warning)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, size: 20),
+                            onPressed: qty > 0
+                                ? () => setSheetState(() => quantities[item.id] = qty - 1)
+                                : null,
+                          ),
+                          Container(
+                            width: 36,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('$qty',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, size: 20),
+                            onPressed: () => setSheetState(() => quantities[item.id] = qty + 1),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      ),
+    );
+  }
+
   void _confirmDelete(ItemCatalogEntry item) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Delete "${item.name}"?'),
         content: const Text('This item will be removed from your catalog.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
               child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(dialogContext, rootNavigator: true).pop();
               ref.read(itemCatalogProvider.notifier).removeItem(item.id);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -199,9 +438,14 @@ class _ItemTile extends StatelessWidget {
   final ItemCatalogEntry item;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onGenerateBarcode;
 
-  const _ItemTile(
-      {required this.item, required this.onEdit, required this.onDelete});
+  const _ItemTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+    this.onGenerateBarcode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +547,58 @@ class _ItemTile extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (!item.isService && item.lowStockThreshold != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        item.isOutOfStock
+                            ? Icons.error_outline
+                            : item.isLowStock
+                                ? Icons.warning_amber_rounded
+                                : Icons.check_circle_outline,
+                        size: 12,
+                        color: item.isOutOfStock
+                            ? AppColors.danger
+                            : item.isLowStock
+                                ? AppColors.warning
+                                : AppColors.success,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        item.isOutOfStock
+                            ? 'Out of stock'
+                            : 'Stock: ${item.stock.toStringAsFixed(0)} / ${item.lowStockThreshold!.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: item.isOutOfStock
+                              ? AppColors.danger
+                              : item.isLowStock
+                                  ? AppColors.warning
+                                  : AppColors.success,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (item.purchasePrice != null && item.purchasePrice! > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.trending_up, size: 12, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Profit: ₹${(item.unitPrice - item.purchasePrice!).toStringAsFixed(2)}/unit',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -310,6 +606,23 @@ class _ItemTile extends StatelessWidget {
           // Actions
           Column(
             children: [
+              if (onGenerateBarcode != null)
+                InkWell(
+                  onTap: onGenerateBarcode,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      item.barcode != null && item.barcode!.isNotEmpty
+                          ? Icons.qr_code
+                          : Icons.qr_code_2,
+                      size: 18,
+                      color: item.barcode != null && item.barcode!.isNotEmpty
+                          ? AppColors.primary
+                          : AppColors.textTertiaryLight,
+                    ),
+                  ),
+                ),
               InkWell(
                 onTap: onEdit,
                 borderRadius: BorderRadius.circular(8),

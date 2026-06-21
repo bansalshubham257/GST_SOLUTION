@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart' show launchUrl, LaunchMode;
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/storage/local_storage.dart';
+import '../../../../core/providers/language_provider.dart';
 import '../../../backup/data/services/backup_service.dart';
+import '../../../backup/data/services/backup_settings_provider.dart';
+import '../../../business_setup/data/models/business_template.dart';
+import '../../../business_setup/presentation/providers/business_template_provider.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../invoice/presentation/providers/item_catalog_provider.dart';
 import '../providers/auth_provider.dart';
 
 class ProfilePage extends ConsumerWidget {
@@ -146,6 +153,8 @@ class ProfilePage extends ConsumerWidget {
           AppCard(
             child: Column(
               children: [
+                _buildTemplateTile(context, ref),
+                const Divider(height: 1),
                 _SettingsItem(
                   icon: Icons.business_outlined,
                   title: 'Business Profile',
@@ -158,6 +167,27 @@ class ProfilePage extends ConsumerWidget {
                   title: 'Invoice Settings',
                   subtitle: 'Prefix, terms, signature, templates',
                   onTap: () => context.push(AppRoutes.invoiceSettings),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.sell_outlined,
+                  title: 'Sale Settings',
+                  subtitle: 'Barcode, fields, defaults',
+                  onTap: () => context.push(AppRoutes.saleSettings),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.inventory_outlined,
+                  title: 'Item Settings',
+                  subtitle: 'Dates, stock, purchase price fields',
+                  onTap: () => context.push(AppRoutes.itemSettings),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.visibility_outlined,
+                  title: 'Feature Visibility',
+                  subtitle: 'Show/hide Staff, Customers, Purchases & more',
+                  onTap: () => context.push(AppRoutes.featureSettings),
                 ),
               ],
             ),
@@ -181,6 +211,75 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 _SettingsItem(
+                  icon: Icons.download_outlined,
+                  title: 'Save Backup',
+                  subtitle: 'Save backup file to device storage',
+                  onTap: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Saving backup...')),
+                    );
+                    final path = await BackupService.saveLocalBackup();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    if (path != null) {
+                      showDialog(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Backup Saved'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Your data has been backed up successfully.'),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceLight,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: SelectableText(path,
+                                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('Use a file manager to browse to this location.',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('OK'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                BackupService.exportAndShare();
+                              },
+                              child: const Text('Share'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Backup failed'),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
+                  icon: Icons.schedule_outlined,
+                  title: 'Auto Backup',
+                  subtitle: ref.watch(backupSettingsProvider).frequency.label,
+                  onTap: () => _showBackupSettings(context, ref),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
                   icon: Icons.restore_outlined,
                   title: 'Restore Backup',
                   subtitle: 'Load data from a backup file',
@@ -201,6 +300,11 @@ class ProfilePage extends ConsumerWidget {
                     if (confirm != true) return;
                     final ok = await BackupService.importFromPicker();
                     if (!context.mounted) return;
+                    if (ok) {
+                      // Force in-memory providers to reload from Hive
+                      ref.invalidate(itemCatalogProvider);
+                      ref.invalidate(dashboardStatsProvider);
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(ok ? 'Backup restored successfully' : 'Restore failed'),
@@ -227,6 +331,14 @@ class ProfilePage extends ConsumerWidget {
                         val ? ThemeMode.dark : ThemeMode.light;
                   },
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.language),
+                  title: const Text('Language'),
+                  subtitle: Text(ref.watch(appLanguageProvider).label),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showLanguagePicker(context, ref),
+                ),
               ],
             ),
           ),
@@ -237,6 +349,13 @@ class ProfilePage extends ConsumerWidget {
             child: Column(
               children: [
                 _SettingsItem(
+                  icon: Icons.smart_toy_outlined,
+                  title: 'GST Assistant',
+                  subtitle: 'Create invoices via chat',
+                  onTap: () => context.push(AppRoutes.chatFlow),
+                ),
+                const Divider(height: 1),
+                _SettingsItem(
                   icon: Icons.support_agent_outlined,
                   title: 'Chat Support',
                   onTap: () => context.push(AppRoutes.chatSupport),
@@ -245,13 +364,13 @@ class ProfilePage extends ConsumerWidget {
                 _SettingsItem(
                   icon: Icons.privacy_tip_outlined,
                   title: 'Privacy Policy',
-                  onTap: () {},
+                  onTap: () => context.push(AppRoutes.privacyPolicy),
                 ),
                 const Divider(height: 1),
                 _SettingsItem(
                   icon: Icons.description_outlined,
                   title: 'Terms of Service',
-                  onTap: () {},
+                  onTap: () => context.push(AppRoutes.termsOfService),
                 ),
               ],
             ),
@@ -322,26 +441,134 @@ class ProfilePage extends ConsumerWidget {
         planLabel = 'Free';
         planIcon = Icons.free_breakfast;
         planColor = AppColors.textSecondaryLight;
-        planDesc = 'Limited to 2 staff, 2 services, 2 sales';
+        planDesc = 'Unlimited • Includes ads';
     }
 
+    final adsRemoved = LocalStorage.settingsBox.get('ads_removed', defaultValue: false) as bool;
+
     return AppCard(
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-          child: Icon(planIcon, color: planColor, size: 22),
-        ),
-        title: Text(planLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(planDesc, style: Theme.of(context).textTheme.bodySmall),
-        trailing: isPaid
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                child: Text('Active', style: TextStyle(fontSize: 11, color: planColor, fontWeight: FontWeight.w600)),
-              )
-            : null,
+      child: Column(
+        children: [
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: Icon(planIcon, color: planColor, size: 22),
+            ),
+            title: Text(planLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            subtitle: Text(planDesc, style: Theme.of(context).textTheme.bodySmall),
+            trailing: isPaid || adsRemoved
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: planColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Text(adsRemoved ? 'Ad-Free' : 'Active', style: TextStyle(fontSize: 11, color: planColor, fontWeight: FontWeight.w600)),
+                  )
+                : null,
+          ),
+          if (!isPaid && !adsRemoved && user.plan == 'free')
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.chat, size: 16),
+                label: const Text('Remove Ads — Contact on WhatsApp'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  minimumSize: const Size(double.infinity, 36),
+                ),
+                onPressed: () async {
+                  final uri = Uri.parse('https://wa.me/+919538923091');
+                  try {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } catch (_) {}
+                },
+              ),
+            ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildTemplateTile(BuildContext context, WidgetRef ref) {
+    final template = ref.watch(businessTemplateProvider);
+    return _SettingsItem(
+      icon: template.icon,
+      title: 'Business Template',
+      subtitle: template.displayName,
+      onTap: () => _showTemplatePicker(context, ref, template),
+    );
+  }
+
+  void _showTemplatePicker(BuildContext context, WidgetRef ref, BusinessTemplate current) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Choose Business Template',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Text('Pre-fills all settings for your business type',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondaryLight)),
+              const SizedBox(height: 16),
+              ...BusinessTemplate.values.map((t) {
+                final selected = t == current;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: selected ? AppColors.primarySurface : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        if (t != current) {
+                          ref.read(businessTemplateProvider.notifier).select(t, ref);
+                          Navigator.pop(ctx);
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: selected ? AppColors.primary : AppColors.surfaceVariantLight,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(t.icon, color: selected ? Colors.white : AppColors.textSecondaryLight, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.displayName,
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: selected ? AppColors.primary : null)),
+                                  Text(t.description,
+                                      style: TextStyle(fontSize: 12, color: AppColors.textTertiaryLight)),
+                                ],
+                              ),
+                            ),
+                            if (selected)
+                              const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -369,5 +596,92 @@ class _SettingsItem extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
     );
   }
+}
+
+void _showLanguagePicker(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Select Language', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ),
+        ...AppLanguage.values.map((lang) => ListTile(
+          leading: Icon(
+            ref.watch(appLanguageProvider) == lang ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: AppColors.primary,
+          ),
+          title: Text(lang.label),
+          onTap: () {
+            ref.read(appLanguageProvider.notifier).setLanguage(lang);
+            Navigator.pop(ctx);
+          },
+        )),
+        const SizedBox(height: 16),
+      ],
+    ),
+  );
+}
+
+void _showBackupSettings(BuildContext context, WidgetRef ref) {
+  final settings = ref.read(backupSettingsProvider);
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Auto Backup Frequency', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ),
+        ...BackupFrequency.values.map((freq) => ListTile(
+          leading: Icon(
+            settings.frequency == freq ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: AppColors.primary,
+          ),
+          title: Text(freq.label),
+          onTap: () {
+            ref.read(backupSettingsProvider.notifier).updateFrequency(freq);
+            Navigator.pop(ctx);
+          },
+        )),
+        if (settings.lastBackupAt != null) ...[
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Last backup: ${settings.lastBackupAt!.day}/${settings.lastBackupAt!.month}/${settings.lastBackupAt!.year}',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+      ],
+    ),
+  );
 }
 

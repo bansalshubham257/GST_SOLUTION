@@ -144,6 +144,9 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+      ),
       textTheme: _buildTextTheme(AppColors.textPrimaryLight, AppColors.textSecondaryLight),
     );
   }
@@ -205,6 +208,9 @@ class AppTheme {
         color: AppColors.dividerDark,
         thickness: 1,
         space: 1,
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
       ),
       textTheme: _buildTextTheme(AppColors.textPrimaryDark, AppColors.textSecondaryDark),
     );

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../core/storage/local_storage.dart';
 import '../../../invoice/data/models/item_catalog_entry.dart';
+import '../../../invoice/presentation/providers/item_catalog_provider.dart';
 import '../../../staff/domain/entities/staff_entity.dart';
 
 class ServiceEntryState {
@@ -11,11 +12,13 @@ class ServiceEntryState {
   final double staffCommissionPercentage;
   final List<ServiceEntryItem> services;
   final String paymentMode;
+  final String paymentStatus; // 'paid' or 'unpaid'
   final String? customerId;
   final String? customerName;
   final String? customerPhone;
   final String? customerGstin;
   final String? customerState;
+  final double discountPercent;
   final bool isSaving;
   final bool isSuccess;
   final String? error;
@@ -26,11 +29,13 @@ class ServiceEntryState {
     this.staffCommissionPercentage = 0,
     this.services = const [],
     this.paymentMode = 'cash',
+    this.paymentStatus = 'paid',
     this.customerId,
     this.customerName,
     this.customerPhone,
     this.customerGstin,
     this.customerState,
+    this.discountPercent = 0,
     this.isSaving = false,
     this.isSuccess = false,
     this.error,
@@ -42,11 +47,13 @@ class ServiceEntryState {
     double? staffCommissionPercentage,
     List<ServiceEntryItem>? services,
     String? paymentMode,
+    String? paymentStatus,
     String? customerId,
     String? customerName,
     String? customerPhone,
     String? customerGstin,
     String? customerState,
+    double? discountPercent,
     bool? isSaving,
     bool? isSuccess,
     String? error,
@@ -58,11 +65,13 @@ class ServiceEntryState {
           staffCommissionPercentage ?? this.staffCommissionPercentage,
       services: services ?? this.services,
       paymentMode: paymentMode ?? this.paymentMode,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
       customerId: customerId ?? this.customerId,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerGstin: customerGstin ?? this.customerGstin,
       customerState: customerState ?? this.customerState,
+      discountPercent: discountPercent ?? this.discountPercent,
       isSaving: isSaving ?? this.isSaving,
       isSuccess: isSuccess ?? this.isSuccess,
       error: error,
@@ -77,7 +86,9 @@ class ServiceEntryState {
         return sum + (taxable * s.gstRate / 100);
       });
 
-  double get grandTotal => subTotal + totalGst;
+  double get discountAmount => subTotal * discountPercent / 100;
+
+  double get grandTotal => subTotal + totalGst - discountAmount;
 
   double get totalCommission => services.fold(0, (sum, s) {
         final taxable = s.quantity * s.unitPrice;
@@ -163,6 +174,14 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
     state = state.copyWith(paymentMode: mode);
   }
 
+  void setPaymentStatus(String status) {
+    state = state.copyWith(paymentStatus: status);
+  }
+
+  void setDiscount(double percent) {
+    state = state.copyWith(discountPercent: percent.clamp(0, 100));
+  }
+
   void setCustomer(String id, String name, String phone, {String? gstin, String? stateName}) {
     state = state.copyWith(
       customerId: id,
@@ -244,6 +263,7 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
         'state': state.customerState,
         'invoiceDate': now.toIso8601String(),
         'status': 'paid',
+        'paymentStatus': state.paymentStatus,
         'paymentMode': state.paymentMode,
         'isInterState': false,
         'lineItems': lineItems,
@@ -252,6 +272,8 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
         'totalSgst': state.totalGst / 2,
         'totalIgst': 0,
         'totalTax': state.totalGst,
+        'discountPercent': state.discountPercent,
+        'discountAmount': state.discountAmount,
         'grandTotal': state.grandTotal,
         'roundOff': 0,
         'commissionAmount': state.totalCommission,
@@ -260,6 +282,15 @@ class ServiceEntryNotifier extends Notifier<ServiceEntryState> {
       };
 
       await LocalStorage.cacheInvoice(id, invoiceData);
+
+      // Reduce stock for sold items
+      final catalog = ref.read(itemCatalogProvider.notifier);
+      for (final s in state.services) {
+        final match = catalog.findByName(s.serviceName);
+        if (match != null && !match.isService) {
+          await catalog.adjustStock(match.id, -s.quantity);
+        }
+      }
 
       state = state.copyWith(isSaving: false, isSuccess: true);
     } catch (e) {

@@ -798,7 +798,12 @@ class _ScanReviewBodyState extends ConsumerState<_ScanReviewBody> {
           ],
         ),
         const SizedBox(height: 8),
-        ...List.generate(_lineItems.length, (i) => _buildLineItemCard(i)),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _lineItems.length,
+          itemBuilder: (_, i) => _buildLineItemCard(i),
+        ),
       ],
     );
   }

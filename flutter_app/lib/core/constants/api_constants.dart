@@ -6,7 +6,7 @@ class ApiConstants {
   // Base URLs
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:5000/api/v1', // Android emulator localhost
+    defaultValue: 'https://gstsolution-production.up.railway.app/api/v1',
   );
 
   static const String productionBaseUrl = 'https://api.salonregister.in/api/v1';

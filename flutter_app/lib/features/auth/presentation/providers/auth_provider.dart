@@ -72,12 +72,48 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       _firebaseAvailable = false;
     }
 
+    // 0. Check for local-only (skip login) mode
+    final localUserId = await SecureStorage.read(AppConstants.localUserIdKey);
+    if (localUserId != null) {
+      final userEntity = UserEntity(
+        id: localUserId,
+        name: 'Guest',
+        plan: 'free',
+        maxStaff: 999999999,
+        maxServices: 999999999,
+        maxSales: 999999999,
+        isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+        businessId: 'local-business',
+        createdAt: DateTime.now(),
+      );
+      return AuthState(
+        isLoggedIn: true,
+        isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+        user: userEntity,
+      );
+    }
+
+    // 0.5 Check for cached user data (offline re-launch after login)
+    final cachedUserData = LocalStorage.getUserData();
+    if (cachedUserData.isNotEmpty) {
+      final userEntity = _parseUserEntity(cachedUserData);
+      // Only try API calls if db_paid; otherwise return cached user immediately
+      if (!userEntity.shouldSyncToDb) {
+        return AuthState(
+          isLoggedIn: true,
+          isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+          user: userEntity,
+        );
+      }
+      // For db_paid, fall through to try session restore below
+    }
+
     // 1. Try Firebase user session restoration
     if (_firebaseAvailable) {
       final firebaseUser = _firebaseAuth.currentUser;
       if (firebaseUser != null) {
         try {
-          final response = await _apiClient.get(ApiConstants.me);
+          final response = await _apiClient.get(ApiConstants.me, forceSync: true);
           final userData = response.data as Map<String, dynamic>;
           final userEntity = _parseUserEntity(userData);
 
@@ -85,6 +121,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           if (userEntity.shouldSyncToDb) {
             _syncService.syncAll();
           }
+          _cacheUser(userEntity);
 
           return AuthState(
             isLoggedIn: true,
@@ -92,6 +129,14 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
             user: userEntity,
           );
         } catch (_) {
+          // If we have cached data, use it
+          if (cachedUserData.isNotEmpty) {
+            return AuthState(
+              isLoggedIn: true,
+              isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+              user: _parseUserEntity(cachedUserData),
+            );
+          }
           final localDone = LocalStorage.isBusinessSetupDone();
           return AuthState(
             isLoggedIn: true,
@@ -114,7 +159,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final storedToken = await SecureStorage.read(AppConstants.tokenKey);
     if (storedToken != null) {
       try {
-        final response = await _apiClient.get(ApiConstants.me);
+        final response = await _apiClient.get(ApiConstants.me, forceSync: true);
         final userData = response.data as Map<String, dynamic>;
         final userEntity = _parseUserEntity(userData);
 
@@ -122,6 +167,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         if (userEntity.shouldSyncToDb) {
           _syncService.syncAll();
         }
+        _cacheUser(userEntity);
 
         return AuthState(
           isLoggedIn: true,
@@ -129,11 +175,37 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           user: userEntity,
         );
       } catch (_) {
+        // If we have cached data, use it
+        if (cachedUserData.isNotEmpty) {
+          return AuthState(
+            isLoggedIn: true,
+            isBusinessSetupDone: LocalStorage.isBusinessSetupDone(),
+            user: _parseUserEntity(cachedUserData),
+          );
+        }
         await SecureStorage.deleteAll();
       }
     }
 
     return const AuthState(isLoggedIn: false);
+  }
+
+  /// Cache user entity to local storage for offline re-launch.
+  void _cacheUser(UserEntity user) {
+    LocalStorage.saveUserData({
+      'id': user.id,
+      'name': user.name,
+      'email': user.email,
+      'phone': user.phone,
+      'photoUrl': user.photoUrl,
+      'isBusinessSetupDone': user.isBusinessSetupDone,
+      'businessId': user.businessId,
+      'plan': user.plan,
+      'maxStaff': user.maxStaff,
+      'maxServices': user.maxServices,
+      'maxSales': user.maxSales,
+      'createdAt': user.createdAt.toIso8601String(),
+    });
   }
 
   // ─── Custom Username/Password Login ─────────────────────────────────────────
@@ -147,6 +219,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       final response = await _apiClient.post(
         ApiConstants.dbLogin,
         data: {'username': username, 'password': password},
+        forceSync: true,
       );
 
       final data = response.data as Map<String, dynamic>;
@@ -162,6 +235,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
       await _ensureDataIsolation(userEntity.id);
       await _syncBusinessFlag(userEntity);
+      _cacheUser(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
@@ -196,6 +270,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           'password': password,
           if (name != null && name.isNotEmpty) 'name': name,
         },
+        forceSync: true,
       );
 
       final data = response.data as Map<String, dynamic>;
@@ -208,6 +283,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
       await _ensureDataIsolation(userEntity.id);
       await _syncBusinessFlag(userEntity);
+      _cacheUser(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
@@ -240,13 +316,16 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       await LocalStorage.markBusinessSetupDone();
     }
 
+    // Persist local user ID so app starts offline on next launch
+    await SecureStorage.write(AppConstants.localUserIdKey, userId);
+
     final localUser = UserEntity(
       id: userId,
       name: 'Guest',
       plan: 'free',
-      maxStaff: 2,
-      maxServices: 2,
-      maxSales: 2,
+      maxStaff: 999999999,
+      maxServices: 999999999,
+      maxSales: 999999999,
       isBusinessSetupDone: true,
       businessId: 'local-business',
       createdAt: DateTime.now(),
@@ -425,7 +504,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     if (user == null) return;
 
     try {
-      final response = await _apiClient.post(ApiConstants.login, data: {
+      final response = await _apiClient.post(ApiConstants.login, forceSync: true, data: {
         'uid': user.uid,
         'email': user.email,
         'phone': user.phoneNumber,
@@ -443,6 +522,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
       await _ensureDataIsolation(userEntity.id);
       await _syncBusinessFlag(userEntity);
+      _cacheUser(userEntity);
 
       state = AsyncData(AuthState(
         isLoggedIn: true,
@@ -493,7 +573,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     if (user.isBusinessSetupDone && !LocalStorage.isBusinessSetupDone()) {
       await LocalStorage.markBusinessSetupDone();
     }
-    // Always try to pull business data from server so local cache is in sync
+    // Only fetch business data from server for db_paid plans
+    if (!user.shouldSyncToDb) return;
     try {
       final response = await _apiClient.get(ApiConstants.business);
       final raw = response.data as Map<String, dynamic>;
@@ -501,9 +582,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       if (businessData.isNotEmpty) {
         await LocalStorage.saveBusinessData(businessData);
       }
-    } catch (_) {
-      // Offline — user will see local data or re-enter
-    }
+    } catch (_) {}
   }
 
   String _getFirebaseErrorMessage(FirebaseAuthException e) {

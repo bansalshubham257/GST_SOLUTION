@@ -6,8 +6,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/chat_flow/presentation/pages/chat_flow_page.dart';
+import '../../features/chat_flow/presentation/pages/sale_settings_page.dart';
 import '../../features/auth/presentation/pages/signup_page.dart';
 import '../../features/auth/presentation/pages/otp_verification_page.dart';
+import '../../features/auth/presentation/pages/privacy_policy_page.dart';
+import '../../features/auth/presentation/pages/terms_of_service_page.dart';
 import '../../features/auth/presentation/pages/profile_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/business_setup/presentation/pages/business_setup_page.dart';
@@ -22,14 +25,19 @@ import '../../features/customer/presentation/pages/customer_detail_page.dart';
 import '../../features/gst_reports/presentation/pages/gstr1_page.dart';
 import '../../features/gst_reports/presentation/pages/gstr3b_page.dart';
 import '../../features/gst_reports/presentation/pages/gst_reports_page.dart';
+import '../../features/gst_reports/presentation/pages/sales_register_page.dart';
+import '../../features/gst_reports/presentation/pages/purchase_register_page.dart';
+import '../../features/gst_reports/presentation/pages/tax_liability_page.dart';
 import '../../features/gst_filing/presentation/pages/gst_filing_page.dart';
 import '../../features/chat_support/presentation/pages/chat_support_page.dart';
 import '../../features/invoice/presentation/pages/item_catalog_page.dart';
 import '../../features/invoice/presentation/pages/add_item_page.dart';
 import '../../features/invoice/presentation/pages/invoice_settings_page.dart';
+import '../../features/invoice/presentation/pages/item_settings_page.dart';
 import '../../features/invoice/data/models/item_catalog_entry.dart';
 import '../../features/invoice/domain/entities/invoice_entity.dart';
 import '../../features/purchase/domain/entities/purchase_entity.dart';
+import '../../features/settings/presentation/pages/feature_settings_page.dart';
 import '../../features/staff/presentation/pages/staff_list_page.dart';
 import '../../features/staff/presentation/pages/add_edit_staff_page.dart';
 import '../../features/staff/domain/entities/staff_entity.dart';
@@ -61,6 +69,9 @@ class AppRoutes {
   static const String reports = '/reports';
   static const String gstr1 = '/gst/gstr1';
   static const String gstr3b = '/gst/gstr3b';
+  static const String salesRegister = '/gst/sales-register';
+  static const String purchaseRegister = '/gst/purchase-register';
+  static const String taxLiability = '/gst/tax-liability';
   static const String gstFiling = '/gst-filing';
   static const String chatSupport = '/chat-support';
   static const String chatFlow = '/chat-flow';
@@ -75,11 +86,16 @@ class AppRoutes {
   static const String signup = '/signup';
   static const String profile = '/profile';
   static const String invoiceSettings = '/invoice-settings';
+  static const String saleSettings = '/sale-settings';
+  static const String featureSettings = '/feature-settings';
+  static const String itemSettings = '/item-settings';
   static const String purchases = '/purchases';
   static const String createPurchase = '/purchases/create';
   static const String editPurchase = '/purchases/:id/edit';
   static const String purchaseDetail = '/purchases/:id';
   static const String purchasePreview = '/purchases/:id/preview';
+  static const String privacyPolicy = '/privacy-policy';
+  static const String termsOfService = '/terms-of-service';
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -89,12 +105,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: true,
     redirect: (context, state) {
+      // Wait for auth initialization to complete before redirecting
+      if (authState.isLoading || !authState.hasValue) return null;
+
       final isLoggedIn = authState.valueOrNull?.isLoggedIn ?? false;
       final isBusinessSetupDone =
           authState.valueOrNull?.isBusinessSetupDone ?? false;
       final isPublicRoute = state.matchedLocation == AppRoutes.login ||
           state.matchedLocation == AppRoutes.signup ||
-          state.matchedLocation == AppRoutes.otpVerification;
+          state.matchedLocation == AppRoutes.otpVerification ||
+          state.matchedLocation == AppRoutes.privacyPolicy ||
+          state.matchedLocation == AppRoutes.termsOfService;
 
       if (!isLoggedIn && !isPublicRoute) return AppRoutes.login;
       if (isLoggedIn &&
@@ -189,6 +210,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.invoiceSettings,
         name: 'invoice-settings',
         builder: (context, state) => const InvoiceSettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.saleSettings,
+        name: 'sale-settings',
+        builder: (context, state) => const SaleSettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.itemSettings,
+        name: 'item-settings',
+        builder: (context, state) => const ItemSettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.featureSettings,
+        name: 'feature-settings',
+        builder: (context, state) => const FeatureSettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.privacyPolicy,
+        name: 'privacy-policy',
+        builder: (context, state) => const PrivacyPolicyPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.termsOfService,
+        name: 'terms-of-service',
+        builder: (context, state) => const TermsOfServicePage(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -321,6 +367,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   path: 'gstr3b',
                   name: 'gstr3b',
                   builder: (context, state) => const Gstr3bPage(),
+                ),
+                GoRoute(
+                  path: 'sales-register',
+                  name: 'sales-register',
+                  builder: (context, state) => const SalesRegisterPage(),
+                ),
+                GoRoute(
+                  path: 'purchase-register',
+                  name: 'purchase-register-tab',
+                  builder: (context, state) => const PurchaseRegisterPage(),
+                ),
+                GoRoute(
+                  path: 'tax-liability',
+                  name: 'tax-liability',
+                  builder: (context, state) => const TaxLiabilityPage(),
                 ),
               ],
             ),

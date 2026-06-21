@@ -82,9 +82,9 @@ class CustomerDetailPage extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(customer.name, style: Theme.of(context).textTheme.headlineSmall),
+                    Text(customer.name, style: Theme.of(context).textTheme.headlineSmall, overflow: TextOverflow.ellipsis),
                     if (customer.gstin != null)
-                      Text('GSTIN: ${customer.gstin}', style: Theme.of(context).textTheme.bodySmall),
+                      Text('GSTIN: ${customer.gstin}', style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -106,7 +106,7 @@ class CustomerDetailPage extends ConsumerWidget {
         children: [
           Icon(icon, size: 16, color: AppColors.textSecondaryLight),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

@@ -467,6 +467,8 @@ class InvoicePdfService {
               ],
               if (invoice.isInterState)
                 _totalRow('IGST', invoice.totalIgst),
+              if (invoice.discountAmount > 0)
+                _totalRow('Discount', -invoice.discountAmount),
               pw.Divider(),
               if (invoice.roundOff != 0)
                 _totalRow('Round Off', invoice.roundOff),

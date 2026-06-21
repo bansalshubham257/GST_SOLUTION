@@ -27,6 +27,7 @@ class InvoiceEntity extends Equatable {
   final double roundOff;
   final String status;
   final String paymentMode;
+  final String paymentStatus; // 'paid' or 'unpaid'
   final bool isInterState;
   final String? notes;
   final String? termsAndConditions;
@@ -58,6 +59,7 @@ class InvoiceEntity extends Equatable {
     required this.roundOff,
     required this.status,
     this.paymentMode = 'cash',
+    this.paymentStatus = 'unpaid',
     required this.isInterState,
     this.notes,
     this.termsAndConditions,

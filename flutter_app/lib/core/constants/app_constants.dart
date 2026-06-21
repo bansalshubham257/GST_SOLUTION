@@ -3,9 +3,9 @@
 class AppConstants {
   AppConstants._();
 
-  static const String appName = 'Register';
+  static const String appName = 'Business Solution';
   static const String appVersion = '1.0.0';
-  static const String appTagline = 'Your Daily Register, Automated';
+  static const String appTagline = 'GST Billing Made Simple';
 
   // Hive Box Names
   static const String invoiceBox = 'invoices_box';
@@ -26,6 +26,7 @@ class AppConstants {
   static const String userIdKey = 'user_id';
   static const String businessIdKey = 'business_id';
   static const String lastUserIdKey = 'last_user_id';
+  static const String localUserIdKey = 'local_user_id';
 
   // GST Rate Slabs (hidden from daily use)
   static const List<double> gstRates = [0, 5, 12, 18, 28];
@@ -88,5 +89,8 @@ class AppConstants {
   // Timeouts — keep short so offline fallback is instant
   static const int connectTimeout = 3000;   // 3 seconds
   static const int receiveTimeout = 5000;   // 5 seconds
+
+  // Routes
+  static const String purchaseRegister = '/purchase-register';
 }
 

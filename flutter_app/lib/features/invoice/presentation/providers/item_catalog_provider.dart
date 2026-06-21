@@ -27,12 +27,17 @@ class ItemCatalogNotifier extends StateNotifier<List<ItemCatalogEntry>> {
   Future<void> addItem({
     required String name,
     required double unitPrice,
+    double? purchasePrice,
     required double gstRate,
     String unit = 'Nos',
     String? hsnCode,
     bool isService = false,
     String? barcode,
     double stock = 0,
+    double? lowStockThreshold,
+    DateTime? manufacturingDate,
+    DateTime? expiryDate,
+    DateTime? bestBeforeDate,
   }) async {
     final id = 'item-${_uuid.v4().substring(0, 8)}';
     final entry = ItemCatalogEntry(
@@ -40,11 +45,16 @@ class ItemCatalogNotifier extends StateNotifier<List<ItemCatalogEntry>> {
       name: name,
       unit: unit,
       unitPrice: unitPrice,
+      purchasePrice: purchasePrice,
       gstRate: gstRate,
       hsnCode: hsnCode,
       isService: isService,
       barcode: barcode,
       stock: stock,
+      lowStockThreshold: lowStockThreshold,
+      manufacturingDate: manufacturingDate,
+      expiryDate: expiryDate,
+      bestBeforeDate: bestBeforeDate,
     );
     await LocalStorage.saveItemCatalog(id, entry.toJson());
     state = [entry, ...state];
